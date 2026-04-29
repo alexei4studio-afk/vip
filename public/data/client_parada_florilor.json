@@ -1,21 +1,27 @@
 {
     "prices": [
         {
-            "produs": "Glovo Buchete",
-            "pret": "30-50 lei",
+            "produs": "Glovo",
+            "pret": "40-60 lei",
             "timp_livrare": "30-60 minute",
-            "data": "2026-04-29 11:49:55"
+            "data": "2026-04-29 12:53:27"
         },
         {
-            "produs": "Glovo Trandafiri",
-            "pret": "20-40 lei",
-            "timp_livrare": "30-60 minute",
-            "data": "2026-04-29 11:49:55"
+            "produs": "Bucheturi.ro",
+            "pret": "30-50 lei",
+            "timp_livrare": "60-90 minute",
+            "data": "2026-04-29 12:53:27"
+        },
+        {
+            "produs": "Floristerie.ro",
+            "pret": "40-70 lei",
+            "timp_livrare": "30-90 minute",
+            "data": "2026-04-29 12:53:27"
         }
     ],
     "strategii": [
-        "Îmbunătățirea calității produselor și reducerea prețurilor",
-        "Introducerea unei oferte speciale pentru clienții care comandă în avans sau în cantități mari",
-        "Crearea unei aplicații mobilă care permite clienților să comande și să urmărească livrarea în timp real"
+        "Scădere prețurilor cu 10-15% pentru a ajunge la nivelul concurenței",
+        "Introducerea unei opțiuni de livrare rapidă (20-30 minute) cu un supliment de 10-20% la preț",
+        "Crearea unei secțiuni dedicate de trandafiri și buchete de înaltă calitate, cu prețuri competitive și o garanție de calitate"
     ]
 }

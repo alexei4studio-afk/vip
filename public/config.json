@@ -1,27 +1,46 @@
 {
   "clients": [
     {
-      "name": "Parada Florilor",
       "access_token": "flo99",
-      "type": "local",
+      "keywords": [
+        "buchete",
+        "trandafiri"
+      ],
       "location": "București, Sector 3",
-      "keywords": ["buchete", "trandafiri"],
-      "platforme": ["glovo"]
+      "name": "Parada Florilor",
+      "platforme": [
+        "glovo"
+      ],
+      "type": "local"
     },
     {
-      "name": "Napoletano",
       "access_token": "nap77",
-      "type": "local",
+      "keywords": [
+        "pizza napoletana",
+        "margherita"
+      ],
       "location": "București",
-      "keywords": ["pizza napoletana", "margherita"],
-      "platforme": ["tazz", "glovo"]
+      "name": "Napoletano",
+      "platforme": [
+        "tazz",
+        "glovo"
+      ],
+      "type": "local",
+      "sources": [
+        "https://glovoapp.com/ro/ro/bucuresti/pizzeria-massari-buc/"
+      ]
     },
     {
-      "name": "Business National",
       "access_token": "bus88",
-      "type": "national",
-      "targets": ["emag.ro", "altex.ro"],
-      "keywords": ["produs generic"]
+      "keywords": [
+        "produs generic"
+      ],
+      "name": "Business National",
+      "targets": [
+        "emag.ro",
+        "altex.ro"
+      ],
+      "type": "national"
     }
   ]
 }

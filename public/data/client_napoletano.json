@@ -1,21 +1,69 @@
 {
     "prices": [
         {
-            "produs": "Tazz",
-            "pret": "20-25 lei",
-            "timp_livrare": "30-45 minute",
-            "data": "2026-04-29 11:49:57"
+            "platforma": "Tazz",
+            "competitor": "Massari",
+            "margherita": "49,9 RON",
+            "diavola": "64,9 RON",
+            "quattro_formaggi": "",
+            "taxa_livrare": "3,9 RON",
+            "data": "2026-04-29 12:53:29"
         },
         {
-            "produs": "Glovo",
-            "pret": "22-28 lei",
-            "timp_livrare": "20-40 minute",
-            "data": "2026-04-29 11:49:57"
+            "platforma": "Tazz",
+            "competitor": "Napoli Pizzeria",
+            "margherita": "49,9 RON",
+            "diavola": "59,9 RON",
+            "quattro_formaggi": "",
+            "taxa_livrare": "4,9 RON",
+            "data": "2026-04-29 12:53:29"
+        },
+        {
+            "platforma": "Tazz",
+            "competitor": "Mamizza",
+            "margherita": "49,9 RON",
+            "diavola": "54,9 RON",
+            "quattro_formaggi": "",
+            "taxa_livrare": "4,9 RON",
+            "data": "2026-04-29 12:53:29"
+        },
+        {
+            "platforma": "Glovo",
+            "competitor": "Massari",
+            "margherita": "49,9 RON",
+            "diavola": "64,9 RON",
+            "quattro_formaggi": "",
+            "taxa_livrare": "3,9 RON",
+            "data": "2026-04-29 12:53:29"
+        },
+        {
+            "platforma": "Glovo",
+            "competitor": "Napoli Pizzeria",
+            "margherita": "49,9 RON",
+            "diavola": "59,9 RON",
+            "quattro_formaggi": "",
+            "taxa_livrare": "4,9 RON",
+            "data": "2026-04-29 12:53:29"
+        },
+        {
+            "platforma": "Glovo",
+            "competitor": "Mamizza",
+            "margherita": "49,9 RON",
+            "diavola": "54,9 RON",
+            "quattro_formaggi": "",
+            "taxa_livrare": "4,9 RON",
+            "data": "2026-04-29 12:53:29"
         }
     ],
+    "analiza": {
+        "pret_margherita_noi": "45 RON",
+        "media_margherita_competitori": "49,9 RON",
+        "cea_mai_ieftina_diavola": "Mamizza 54,9 RON",
+        "diferenta_diavola": "10 RON față de următorii competitori"
+    },
     "strategii": [
-        "Reducerea prețurilor cu 15% pentru a atrage clienți noi și a îmbunătăți performanța comercială.",
-        "Ofertarea unui timp de livrare mai scurt, cu max 20 de minute, prin utilizarea unor parteneri de livrare mai rapizi.",
-        "Includerea de oferte speciale, cum ar fi pizza cu un discount de 10% pentru comenzi suplimentare, pentru a crește media comandă și a îmbunătăți profitabilitatea."
+        "Ajustăm prețul Margheritei la 49,9 RON pentru a fi pe aceeași linie cu competitorii.",
+        "Nu modificăm prețul Diavolei, deoarece este deja competitiv.",
+        "Oferește un bundle Pizza + Suc cu o taxa de livrare redusă de 3,9 RON ca și Massari."
     ]
 }

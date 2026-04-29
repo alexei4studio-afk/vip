@@ -1,0 +1,17 @@
+{
+    "prices": [
+        {
+            "platforma": "https://glovoapp.com/ro/ro/bucuresti/pizzeria-massari-buc/",
+            "competitor": "Napoletano",
+            "margherita": "41-48 RON",
+            "diavola": "44-47 RON",
+            "quattro_formaggi": "45-49 RON",
+            "taxa_livrare": "8-12 RON",
+            "data": "2026-04-29 13:27:40"
+        }
+    ],
+    "strategii": [
+        "Fallback manual activ. Verifică pagina deschisă și relansează scraperul."
+    ],
+    "fallback": true
+}

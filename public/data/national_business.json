@@ -2,27 +2,21 @@
     "regiuni": [
         {
             "nume_sursa": "emag.ro",
-            "pret_mediu_national": "29.99",
+            "pret_mediu_national": "299.99",
             "stoc_status": "Stoc disponibil",
-            "timestamp": "2026-04-29 11:49:58"
+            "timestamp": "2026-04-29 12:53:30"
         },
         {
             "nume_sursa": "altex.ro",
-            "pret_mediu_national": "39.99",
+            "pret_mediu_national": "249.99",
             "stoc_status": "Stoc disponibil",
-            "timestamp": "2026-04-29 11:49:58"
-        },
-        {
-            "nume_sursa": "otomoto.ro",
-            "pret_mediu_national": "29.99",
-            "stoc_status": "Stoc disponibil",
-            "timestamp": "2026-04-29 11:49:58"
+            "timestamp": "2026-04-29 12:53:30"
         }
     ],
-    "lider_pret": "emag.ro",
-    "media_pietei": "33.99",
+    "lider_pret": "altex.ro",
+    "media_pietei": "274.99",
     "strategii": [
-        "Preț unitar național",
-        "Preț diferențiat regiuni/canale (metropole, orașe, sate)"
+        "Strategia de preț unitară pe toate regiunile",
+        "Strategia de preț diferențiată pe regiuni, cu preț mai scăzut în regiunile în care competitorii au stoc lipsă"
     ]
 }

@@ -1,6 +1,6 @@
 browser-use
 langchain
-langchain-groq
+groq
 pydantic
 python-dotenv
 playwright
