@@ -1,7 +1,8 @@
-import csv
+import json
 import asyncio
 from playwright.async_api import async_playwright
 import os
+from datetime import datetime
 
 async def run():
     async with async_playwright() as p:
@@ -23,25 +24,36 @@ async def run():
         title_element = await page.query_selector('h1')
         title = await title_element.inner_text() if title_element else 'N/A'
         
-        data_to_save = [{'Title': title, 'URL': 'https://example.com'}]
+        data_to_save = [{
+            'produs': title,
+            'pret': 'N/A', # Trebuie actualizat cu selectorul pentru preț
+            'data': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }]
             
         await browser.close()
 
         # Ne asigurăm că directorul curent este cel corect (sau creăm unul pentru output dacă e nevoie)
-        output_file = 'output.csv'
+        output_file = 'public/prices.json'
+        
+        # Asigurăm existența folderului 'public'
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
-        # Salvăm datele într-un fișier CSV
-        with open(output_file, mode='a', newline='', encoding='utf-8') as file:
-            # Folosim 'a' pentru append (adăugare), ca să nu suprascriem în fiecare zi, ci să adunăm datele.
-            # Dacă fișierul e nou, scriem și header-ul.
-            file_exists = os.path.isfile(output_file) and os.path.getsize(output_file) > 0
-            writer = csv.DictWriter(file, fieldnames=['Title', 'URL'])
-            
-            if not file_exists:
-                writer.writeheader()
+        existing_data = []
+        # Încercăm să citim datele vechi pentru a adăuga la ele
+        if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
+            try:
+                with open(output_file, mode='r', encoding='utf-8') as file:
+                    existing_data = json.load(file)
+            except json.JSONDecodeError:
+                pass
                 
-            writer.writerows(data_to_save)
-            print(f"Date salvate cu succes în {output_file}")
+        existing_data.extend(data_to_save)
+
+        # Salvăm datele actualizate într-un fișier JSON
+        with open(output_file, mode='w', encoding='utf-8') as file:
+            json.dump(existing_data, file, indent=4, ensure_ascii=False)
+            
+        print(f"Date salvate cu succes în {output_file}")
 
 if __name__ == '__main__':
     asyncio.run(run())
