@@ -1,0 +1,6 @@
+browser-use
+langchain
+langchain-groq
+pydantic
+python-dotenv
+playwright

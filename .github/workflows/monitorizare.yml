@@ -24,12 +24,14 @@ jobs:
       - name: Instalare dependențe
         run: |
           python -m pip install --upgrade pip
-          pip install playwright
+          pip install -r requirements.txt
 
       - name: Instalare browser
-        run: playwright install chromium
+        run: playwright install chromium --with-deps
 
       - name: Executare script
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: python scrape.py
 
       - name: Git Commit & Push
