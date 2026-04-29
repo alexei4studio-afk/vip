@@ -1,0 +1,44 @@
+name: Monitorizare Zilnică
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run-scraper:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalare dependențe
+        run: |
+          python -m pip install --upgrade pip
+          pip install playwright
+
+      - name: Instalare browser
+        run: playwright install chromium
+
+      - name: Executare script
+        run: python scrape.py
+
+      - name: Git Commit & Push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add public/prices.json
+          git commit -m "Actualizare automată a prețurilor [skip ci]" || echo "Nu există modificări noi"
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
+          git push
