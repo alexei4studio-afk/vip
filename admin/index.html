@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - azisunt.vip</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-8 font-sans">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-4xl font-extrabold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">Admin Control Panel</h1>
+        <p class="text-slate-400 mb-8">Gestionează setările și lansează scraper-ul manual.</p>
+
+        <div class="bg-slate-800 rounded-2xl shadow-xl border border-slate-700/50 p-6 mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">Setări Platformă (config.json)</h2>
+                <button id="saveBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-6 rounded-lg transition-colors">
+                    Salvează Setările
+                </button>
+            </div>
+            <textarea id="configEditor" class="w-full h-96 bg-slate-950 text-emerald-400 font-mono text-sm p-4 rounded-lg border border-slate-700 focus:outline-none focus:border-cyan-500" spellcheck="false"></textarea>
+            <p id="saveMsg" class="text-emerald-400 text-sm mt-2 hidden">Setările au fost salvate cu succes!</p>
+        </div>
+
+        <div class="bg-slate-800 rounded-2xl shadow-xl border border-slate-700/50 p-6 text-center">
+            <h2 class="text-2xl font-bold mb-4">Lansare Proces IA</h2>
+            <p class="text-slate-400 mb-6">Apasă butonul de mai jos pentru a lansa agenții Browser-Use și a actualiza datele.</p>
+            <button id="startBtn" class="bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-bold py-4 px-12 rounded-full text-xl shadow-lg transition-all transform hover:scale-105">
+                🚀 START MONITORIZARE
+            </button>
+            <p id="startMsg" class="text-cyan-400 text-sm mt-4 hidden">Procesul a fost pornit în fundal! Verifică terminalul (consola neagră) pentru log-uri.</p>
+        </div>
+    </div>
+
+    <script>
+        // Load config
+        fetch('/api/config')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('configEditor').value = JSON.stringify(data, null, 2);
+            });
+
+        // Save config
+        document.getElementById('saveBtn').addEventListener('click', () => {
+            try {
+                const data = JSON.parse(document.getElementById('configEditor').value);
+                fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                }).then(() => {
+                    const msg = document.getElementById('saveMsg');
+                    msg.classList.remove('hidden');
+                    setTimeout(() => msg.classList.add('hidden'), 3000);
+                });
+            } catch(e) {
+                alert("JSON invalid! Te rog verifică formatul.");
+            }
+        });
+
+        // Start scraping
+        document.getElementById('startBtn').addEventListener('click', () => {
+            fetch('/api/start', { method: 'POST' })
+                .then(() => {
+                    const msg = document.getElementById('startMsg');
+                    msg.classList.remove('hidden');
+                    setTimeout(() => msg.classList.add('hidden'), 5000);
+                });
+        });
+    </script>
+</body>
+</html>

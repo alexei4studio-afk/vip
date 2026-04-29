@@ -1,0 +1,21 @@
+{
+    "prices": [
+        {
+            "produs": "Glovo Buchete",
+            "pret": "30-50 lei",
+            "timp_livrare": "30-60 minute",
+            "data": "2026-04-29 11:49:55"
+        },
+        {
+            "produs": "Glovo Trandafiri",
+            "pret": "20-40 lei",
+            "timp_livrare": "30-60 minute",
+            "data": "2026-04-29 11:49:55"
+        }
+    ],
+    "strategii": [
+        "Îmbunătățirea calității produselor și reducerea prețurilor",
+        "Introducerea unei oferte speciale pentru clienții care comandă în avans sau în cantități mari",
+        "Crearea unei aplicații mobilă care permite clienților să comande și să urmărească livrarea în timp real"
+    ]
+}

@@ -1,0 +1,27 @@
+{
+  "clients": [
+    {
+      "name": "Parada Florilor",
+      "access_token": "flo99",
+      "type": "local",
+      "location": "București, Sector 3",
+      "keywords": ["buchete", "trandafiri"],
+      "platforme": ["glovo"]
+    },
+    {
+      "name": "Napoletano",
+      "access_token": "nap77",
+      "type": "local",
+      "location": "București",
+      "keywords": ["pizza napoletana", "margherita"],
+      "platforme": ["tazz", "glovo"]
+    },
+    {
+      "name": "Business National",
+      "access_token": "bus88",
+      "type": "national",
+      "targets": ["emag.ro", "altex.ro"],
+      "keywords": ["produs generic"]
+    }
+  ]
+}
