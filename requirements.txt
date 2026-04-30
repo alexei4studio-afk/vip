@@ -1,7 +1,9 @@
+flask
+flask-cors
+portalocker
 browser-use
 langchain
-groq
+langchain-groq
 pydantic
 python-dotenv
 playwright
-portalocker

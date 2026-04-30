@@ -43,12 +43,14 @@ DISCOVERY_JOBS = {}
 def load_config_data():
     if not os.path.exists(CONFIG_PATH):
         return {"clients": []}
-    with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-        portalocker.lock(f, portalocker.LOCK_SH)
-        try:
+    try:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            # Comentăm portalocker temporar pentru a vedea dacă el cauzează crash-ul
+            # portalocker.lock(f, portalocker.LOCK_SH) 
             return json.load(f)
-        finally:
-            portalocker.unlock(f)
+    except Exception as e:
+        print(f"Error loading config: {e}")
+        return {"clients": []}
 
 
 def save_config_data(data):
