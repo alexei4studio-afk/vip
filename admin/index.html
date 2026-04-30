@@ -6,9 +6,33 @@
     <title>Admin Dashboard - azisunt.vip</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen p-8 font-sans">
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
+    <!-- Admin Login Gate -->
+    <div id="adminLogin" class="flex items-center justify-center min-h-screen p-8">
+        <div class="bg-slate-800 rounded-2xl shadow-xl border border-slate-700/50 p-8 w-full max-w-sm text-center">
+            <h1 class="text-2xl font-extrabold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">Admin Access</h1>
+            <p class="text-slate-400 text-sm mb-6">Introdu parola de administrator.</p>
+            <form id="adminLoginForm" class="space-y-4">
+                <input id="adminPassInput" type="password" required
+                    class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-3 focus:outline-none focus:border-cyan-500"
+                    placeholder="Parolă admin">
+                <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-lg transition-colors">
+                    Autentificare
+                </button>
+                <p id="adminLoginErr" class="text-red-400 text-sm hidden"></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin Panel (hidden until authenticated) -->
+    <div id="adminPanel" class="hidden p-8">
     <div class="max-w-4xl mx-auto">
-        <h1 class="text-4xl font-extrabold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">Admin Control Panel</h1>
+        <div class="flex justify-between items-center mb-2">
+            <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">Admin Control Panel</h1>
+            <button id="adminLogoutBtn" class="text-sm text-slate-400 hover:text-red-400 border border-slate-700 px-4 py-2 rounded-lg transition-colors">
+                Deconectare Admin
+            </button>
+        </div>
         <p class="text-slate-400 mb-8">Gestionează setările și lansează scraper-ul manual.</p>
 
         <div class="bg-slate-800 rounded-2xl shadow-xl border border-slate-700/50 p-6 mb-8">
@@ -92,9 +116,51 @@
             <p id="startMsg" class="text-cyan-400 text-sm mt-4 hidden">Procesul a fost pornit în fundal! Verifică terminalul (consola neagră) pentru log-uri.</p>
         </div>
     </div>
+    </div>
 
     <script>
-        // Add client
+        // --- Admin Auth Guard ---
+        function showAdmin() {
+            document.getElementById('adminLogin').classList.add('hidden');
+            document.getElementById('adminPanel').classList.remove('hidden');
+        }
+
+        if (localStorage.getItem('azisunt_admin') === 'true') {
+            showAdmin();
+        }
+
+        document.getElementById('adminLoginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const password = document.getElementById('adminPassInput').value;
+            const err = document.getElementById('adminLoginErr');
+
+            fetch('/api/admin/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password }),
+            })
+            .then(r => r.json().then(data => ({ ok: r.ok, data })))
+            .then(({ ok, data }) => {
+                if (!ok) {
+                    err.textContent = data.error || 'Parolă incorectă.';
+                    err.classList.remove('hidden');
+                    return;
+                }
+                localStorage.setItem('azisunt_admin', 'true');
+                showAdmin();
+            })
+            .catch(() => {
+                err.textContent = 'Eroare de rețea.';
+                err.classList.remove('hidden');
+            });
+        });
+
+        document.getElementById('adminLogoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('azisunt_admin');
+            window.location.href = '/';
+        });
+
+        // --- Add client ---
         document.getElementById('addClientForm').addEventListener('submit', (e) => {
             e.preventDefault();
             const form = e.target;

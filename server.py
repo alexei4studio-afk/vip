@@ -10,8 +10,10 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import portalocker
 
-app = Flask(__name__, static_folder='admin')
+app = Flask(__name__, static_folder='dist')
 CORS(app)
+
+ADMIN_DIR = os.path.join(os.path.dirname(__file__), 'admin')
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'public', 'config.json')
 DATA_DIR = os.path.join(os.path.dirname(__file__), 'public', 'data')
@@ -167,8 +169,20 @@ def list_archives_for_token(token):
     ]
 
 @app.route('/')
+def serve_spa_root():
+    return send_from_directory('dist', 'index.html')
+
+
+@app.route('/admin')
+@app.route('/admin/')
 def admin_ui():
-    return send_from_directory('admin', 'index.html')
+    return send_from_directory(ADMIN_DIR, 'index.html')
+
+
+@app.route('/admin/<path:filename>')
+def admin_static(filename):
+    return send_from_directory(ADMIN_DIR, filename)
+
 
 @app.route('/api/config', methods=['GET'])
 def get_config():
@@ -305,6 +319,16 @@ def download_export(filename):
     if not safe_name.startswith(f"{token}_"):
         return jsonify({"error": "Access denied"}), 403
     return send_from_directory(EXPORTS_DIR, safe_name, as_attachment=True)
+
+
+@app.route('/api/admin/auth', methods=['POST'])
+def admin_auth():
+    payload = request.json or {}
+    password = (payload.get("password") or "").strip()
+    admin_pass = os.environ.get("ADMIN_PASSWORD", "admin2025")
+    if not password or password != admin_pass:
+        return jsonify({"error": "Parolă incorectă."}), 401
+    return jsonify({"authenticated": True})
 
 
 @app.route('/api/admin/add', methods=['POST'])
@@ -474,10 +498,18 @@ def discover_results():
         return jsonify(json.load(f))
 
 
-@app.route('/dashboard/<path:path>')
-def spa_fallback(path):
+@app.route('/<path:path>')
+def spa_catch_all(path):
+    if path.startswith('api/') or path.startswith('admin'):
+        return jsonify({"error": "Not found"}), 404
+    dist_dir = os.path.join(os.path.dirname(__file__), 'dist')
+    full_path = os.path.join(dist_dir, path)
+    if os.path.isfile(full_path):
+        return send_from_directory('dist', path)
     return send_from_directory('dist', 'index.html')
 
 if __name__ == '__main__':
-    print("Starting Admin Dashboard on http://localhost:5000")
+    print("Starting server on http://localhost:5000")
+    print("  SPA:   http://localhost:5000/")
+    print("  Admin: http://localhost:5000/admin")
     app.run(port=5000, debug=True)
