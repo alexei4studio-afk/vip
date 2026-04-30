@@ -1,5 +1,11 @@
 {
   "version": 2,
+  "builds": [
+    {
+      "src": "server.py",
+      "use": "@vercel/python"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/(.*)",
@@ -14,8 +20,12 @@
       "destination": "admin/index.html"
     },
     {
-      "source": "/((?!api|admin).*)",
-      "destination": "/dist/index.html"
+      "source": "/static/(.*)",
+      "destination": "/dist/static/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "server.py"
     }
   ]
 }

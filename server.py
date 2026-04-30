@@ -508,6 +508,28 @@ def spa_catch_all(path):
         return send_from_directory('dist', path)
     return send_from_directory('dist', 'index.html')
 
+# Adaugă asta pentru a te asigura că Flask găsește folderul dist corect pe Vercel
+dist_dir = os.path.join(os.path.dirname(__file__), 'dist')
+admin_dir = os.path.join(os.path.dirname(__file__), 'admin')
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def catch_all(path):
+    # Dacă e cerere de admin
+    if path.startswith('admin'):
+        return send_from_directory(admin_dir, 'index.html')
+    
+    # Verificăm dacă fișierul există în dist (js, css, imagini)
+    full_path = os.path.join(dist_dir, path)
+    if path != "" and os.path.exists(full_path):
+        return send_from_directory(dist_dir, path)
+    
+    # Altfel, returnăm index.html din dist (pentru React Routing)
+    return send_from_directory(dist_dir, 'index.html')
+
+# Aceasta este variabila pe care o caută Vercel
+app = app
+
 if __name__ == '__main__':
     print("Starting server on http://localhost:5000")
     print("  SPA:   http://localhost:5000/")
