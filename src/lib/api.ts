@@ -31,6 +31,36 @@ export async function saveConfig(config: AppConfig): Promise<void> {
   if (!res.ok) throw new Error('Save failed');
 }
 
+export async function clientAuth(
+  accessToken: string,
+  password: string,
+): Promise<{ client: ClientConfig }> {
+  const apiBase = getApiBaseUrl();
+  const res = await fetch(`${apiBase}/api/client/auth`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ access_token: accessToken, password }),
+  });
+  const payload = await res.json();
+  if (!res.ok) throw new Error(payload.error || 'Autentificare eșuată.');
+  return payload;
+}
+
+export async function addClientSource(
+  token: string,
+  url: string,
+): Promise<{ sources: string[] }> {
+  const apiBase = getApiBaseUrl();
+  const res = await fetch(`${apiBase}/api/client/add-source`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ access_token: token, url }),
+  });
+  const payload = await res.json();
+  if (!res.ok) throw new Error(payload.error || 'Nu am putut adăuga sursa.');
+  return payload;
+}
+
 export async function startClientScraping(
   token: string,
   force: boolean,

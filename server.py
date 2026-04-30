@@ -1,5 +1,6 @@
 import os
 import json
+import shutil
 import subprocess
 import threading
 import time
@@ -9,6 +10,7 @@ from urllib.parse import urlparse
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import portalocker
+from werkzeug.security import generate_password_hash, check_password_hash
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DIST_DIR = os.path.join(BASE_DIR, 'dist')
@@ -19,14 +21,21 @@ CORS(app)
 
 IS_VERCEL = "VERCEL" in os.environ
 
-CONFIG_PATH = os.path.join(BASE_DIR, 'public', 'config.json')
-
+ORIG_CONFIG_PATH = os.path.join(BASE_DIR, 'public', 'config.json')
 if IS_VERCEL:
+    CONFIG_PATH = '/tmp/config.json'
     DATA_DIR = '/tmp/data'
     EXPORTS_DIR = '/tmp/exports'
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(EXPORTS_DIR, exist_ok=True)
+    if not os.path.exists(CONFIG_PATH):
+        if os.path.exists(ORIG_CONFIG_PATH):
+            shutil.copy2(ORIG_CONFIG_PATH, CONFIG_PATH)
+        else:
+            with open(CONFIG_PATH, 'w', encoding='utf-8') as _f:
+                json.dump({"clients": []}, _f)
 else:
+    CONFIG_PATH = ORIG_CONFIG_PATH
     DATA_DIR = os.path.join(BASE_DIR, 'public', 'data')
     EXPORTS_DIR = os.path.join(BASE_DIR, 'exports')
 
@@ -52,14 +61,26 @@ def load_config_data():
 
 
 def save_config_data(data):
-    with open(CONFIG_PATH, 'r+', encoding='utf-8') as f:
-        portalocker.lock(f, portalocker.LOCK_EX)
-        try:
-            f.seek(0)
+    if IS_VERCEL:
+        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-            f.truncate()
-        finally:
-            portalocker.unlock(f)
+    else:
+        with open(CONFIG_PATH, 'r+', encoding='utf-8') as f:
+            portalocker.lock(f, portalocker.LOCK_EX)
+            try:
+                f.seek(0)
+                json.dump(data, f, indent=2, ensure_ascii=False)
+                f.truncate()
+            finally:
+                portalocker.unlock(f)
+
+
+def sanitize_config(config):
+    safe = {"clients": []}
+    for c in config.get("clients", []):
+        safe_client = {k: v for k, v in c.items() if k not in ("access_token", "password")}
+        safe["clients"].append(safe_client)
+    return safe
 
 
 def find_client_by_token(token, require_active=False):
@@ -204,8 +225,12 @@ def admin_static(filename):
 
 @app.route('/api/config', methods=['GET'])
 def get_config():
-    if not os.path.exists(CONFIG_PATH):
-        return jsonify({"error": "Config file not found"}), 404
+    config = load_config_data()
+    return jsonify(sanitize_config(config))
+
+
+@app.route('/api/admin/config', methods=['GET'])
+def get_admin_config():
     return jsonify(load_config_data())
 
 
@@ -351,13 +376,64 @@ def admin_auth():
     return jsonify({"authenticated": True})
 
 
+@app.route('/api/client/auth', methods=['POST'])
+def client_auth():
+    payload = request.json or {}
+    token = (payload.get("access_token") or "").strip()
+    password = (payload.get("password") or "").strip()
+
+    if not token:
+        return jsonify({"error": "Cod de acces necesar."}), 400
+
+    client = find_client_by_token(token, require_active=True)
+    if not client:
+        return jsonify({"error": "Cod de acces invalid sau cont dezactivat."}), 401
+
+    stored_pw = client.get("password", "")
+    if stored_pw:
+        if stored_pw.startswith(("scrypt:", "pbkdf2:")):
+            if not check_password_hash(stored_pw, password):
+                return jsonify({"error": "Parolă incorectă."}), 401
+        else:
+            if password != stored_pw:
+                return jsonify({"error": "Parolă incorectă."}), 401
+
+    safe_client = {k: v for k, v in client.items() if k != "password"}
+    return jsonify({"client": safe_client})
+
+
+@app.route('/api/client/add-source', methods=['POST'])
+def add_client_source():
+    payload = request.json or {}
+    token = (payload.get("access_token") or "").strip()
+    url = (payload.get("url") or "").strip()
+    if not token or not url:
+        return jsonify({"error": "Token și URL necesare."}), 400
+    if not is_valid_manual_url(url):
+        return jsonify({"error": "URL invalid. Permise: Glovo, Wolt, Tazz, Bolt Food."}), 400
+    config = load_config_data()
+    for c in config.get("clients", []):
+        if c.get("access_token") == token and c.get("active", True):
+            sources = c.get("sources", [])
+            if url in sources:
+                return jsonify({"error": "Sursa există deja."}), 409
+            sources.append(url)
+            c["sources"] = sources
+            save_config_data(config)
+            return jsonify({"message": "Sursă adăugată.", "sources": sources})
+    return jsonify({"error": "Client negăsit."}), 404
+
+
 @app.route('/api/admin/add', methods=['POST'])
 def add_client():
     payload = request.json or {}
     name = (payload.get("name") or "").strip()
     token = (payload.get("access_token") or "").strip()
+    password_raw = (payload.get("password") or "").strip()
     glovo_url = (payload.get("glovo_url") or "").strip()
     wolt_url = (payload.get("wolt_url") or "").strip()
+    tazz_url = (payload.get("tazz_url") or "").strip()
+    bolt_url = (payload.get("bolt_url") or "").strip()
     subscription = (payload.get("subscription") or "delivery").strip()
     location = (payload.get("location") or "").strip()
     location_radius = (payload.get("location_radius") or "local").strip()
@@ -382,7 +458,7 @@ def add_client():
             return jsonify({"error": "Token already exists"}), 409
 
     sources = []
-    for url in [glovo_url, wolt_url]:
+    for url in [glovo_url, wolt_url, tazz_url, bolt_url]:
         if url:
             if not is_valid_manual_url(url):
                 return jsonify({"error": f"Invalid URL: {url}"}), 400
@@ -401,6 +477,8 @@ def add_client():
         "keywords": keywords if isinstance(keywords, list) else [],
         "platforme": platforme if isinstance(platforme, list) else ["glovo"],
     }
+    if password_raw:
+        new_client["password"] = generate_password_hash(password_raw)
 
     config.setdefault("clients", []).append(new_client)
     save_config_data(config)

@@ -38,13 +38,26 @@
         <div class="bg-slate-800 rounded-2xl shadow-xl border border-slate-700/50 p-6 mb-8">
             <h2 class="text-xl font-bold mb-4">Add New Client</h2>
             <form id="addClientForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Secțiunea A: Date Identificare -->
+                <div class="md:col-span-2">
+                    <h3 class="text-sm font-semibold text-cyan-400 mb-3">Date Identificare</h3>
+                </div>
                 <div>
-                    <label class="block text-sm text-slate-400 mb-1">Client Name *</label>
+                    <label class="block text-sm text-slate-400 mb-1">Nume Client *</label>
                     <input name="name" required class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="e.g. Pizza Roma">
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-400 mb-1">Access Token *</label>
+                    <label class="block text-sm text-slate-400 mb-1">Cod Acces *</label>
                     <input name="access_token" required class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="e.g. roma42">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-sm text-slate-400 mb-1">Parolă Client</label>
+                    <input name="password" type="password" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="Opțional — pentru securitate suplimentară">
+                </div>
+
+                <!-- Secțiunea B: Surse Competitori -->
+                <div class="md:col-span-2 border-t border-slate-700/50 pt-4 mt-2">
+                    <h3 class="text-sm font-semibold text-cyan-400 mb-3">Surse Competitori</h3>
                 </div>
                 <div>
                     <label class="block text-sm text-slate-400 mb-1">Glovo URL</label>
@@ -54,12 +67,21 @@
                     <label class="block text-sm text-slate-400 mb-1">Wolt URL</label>
                     <input name="wolt_url" type="url" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="https://wolt.com/...">
                 </div>
-
-                <div class="md:col-span-2 border-t border-slate-700/50 pt-4 mt-2">
-                    <h3 class="text-sm font-semibold text-cyan-400 mb-3">Abonament & Discovery</h3>
+                <div>
+                    <label class="block text-sm text-slate-400 mb-1">Tazz URL</label>
+                    <input name="tazz_url" type="url" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="https://tazz.ro/...">
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-400 mb-1">Abonament *</label>
+                    <label class="block text-sm text-slate-400 mb-1">Bolt Food URL</label>
+                    <input name="bolt_url" type="url" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="https://food.bolt.eu/...">
+                </div>
+
+                <!-- Secțiunea C: Abonament -->
+                <div class="md:col-span-2 border-t border-slate-700/50 pt-4 mt-2">
+                    <h3 class="text-sm font-semibold text-cyan-400 mb-3">Abonament</h3>
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-400 mb-1">Tip Abonament *</label>
                     <select name="subscription" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500">
                         <option value="delivery">Ab 2 - Delivery (Monitorizare platforme)</option>
                         <option value="online">Ab 1 - Online (Descoperire competitori)</option>
@@ -67,8 +89,8 @@
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-400 mb-1">Locație (Oraș / Cartier)</label>
-                    <input name="location" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="e.g. București, Sector 3">
+                    <label class="block text-sm text-slate-400 mb-1">Locație</label>
+                    <input name="location" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="ex: Strada Victoriei 10, București (adresă exactă pentru Google Maps)">
                 </div>
                 <div>
                     <label class="block text-sm text-slate-400 mb-1">Rază Descoperire</label>
@@ -81,13 +103,13 @@
                     <label class="block text-sm text-slate-400 mb-1">Cuvinte cheie (separate prin virgulă)</label>
                     <input name="keywords" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="e.g. pizza napoletana, margherita">
                 </div>
-                <div>
+                <div class="md:col-span-2">
                     <label class="block text-sm text-slate-400 mb-1">Platforme (separate prin virgulă)</label>
                     <input name="platforme" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="e.g. glovo, tazz, wolt, bolt" value="glovo">
                 </div>
 
                 <div class="md:col-span-2 flex items-center gap-4">
-                    <button type="submit" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 px-8 rounded-lg transition-colors">Add Client</button>
+                    <button type="submit" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 px-8 rounded-lg transition-colors">Adaugă Client</button>
                     <span id="addMsg" class="text-sm hidden"></span>
                 </div>
             </form>
@@ -183,8 +205,11 @@
             const body = {
                 name: form.name.value.trim(),
                 access_token: form.access_token.value.trim(),
+                password: form.password.value.trim(),
                 glovo_url: form.glovo_url.value.trim(),
                 wolt_url: form.wolt_url.value.trim(),
+                tazz_url: form.tazz_url.value.trim(),
+                bolt_url: form.bolt_url.value.trim(),
                 subscription: subscription,
                 location: location,
                 location_radius: form.location_radius.value,
@@ -215,7 +240,7 @@
 
                 form.reset();
                 // Refresh config editor
-                fetch('/api/config').then(r => r.json()).then(cfg => {
+                fetch('/api/admin/config').then(r => r.json()).then(cfg => {
                     document.getElementById('configEditor').value = JSON.stringify(cfg, null, 2);
                 });
             })
@@ -226,8 +251,8 @@
             });
         });
 
-        // Load config
-        fetch('/api/config')
+        // Load config (full, with tokens — admin only)
+        fetch('/api/admin/config')
             .then(r => r.json())
             .then(data => {
                 document.getElementById('configEditor').value = JSON.stringify(data, null, 2);

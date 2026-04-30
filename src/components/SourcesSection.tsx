@@ -7,9 +7,9 @@ export default function SourcesSection() {
   const { activeClient, reportMsg, addSource, setReportMsg, hasDelivery } = useClient();
   const [sourceInput, setSourceInput] = useState('');
 
-  const handleAddSource = (e: React.FormEvent) => {
+  const handleAddSource = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = addSource(sourceInput);
+    const result = await addSource(sourceInput);
     if (result.error) {
       setReportMsg(result.error);
     } else {

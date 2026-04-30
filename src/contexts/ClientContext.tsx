@@ -9,13 +9,13 @@ import {
 import type { AppConfig, ArchivedReport, ClientConfig, DataRecord, DiscoverySuggestion, SubscriptionTier } from '../lib/types';
 import { deriveClientId } from '../lib/utils';
 import {
-  fetchConfig,
+  clientAuth,
+  addClientSource,
   fetchExports,
   fetchReportStatus,
   fetchDiscoveryStatus,
   fetchDiscoveryResults,
   loadClientDataJson,
-  saveConfig,
   startClientScraping,
   startDiscovery,
 } from '../lib/api';
@@ -48,12 +48,12 @@ interface ClientContextValue {
   isDiscoveryRunning: boolean;
   discoveryLogs: string[];
 
-  login: (token: string) => string | null;
+  login: (token: string, password: string) => Promise<string | null>;
   loginError: string;
   logout: () => void;
   triggerReport: (force?: boolean) => void;
   triggerDiscovery: (scope?: 'local' | 'global') => void;
-  addSource: (url: string) => { success: boolean; error?: string };
+  addSource: (url: string) => Promise<{ success: boolean; error?: string }>;
   setReportMsg: (msg: string) => void;
 }
 
@@ -106,67 +106,53 @@ export function ClientProvider({ children }: { children: ReactNode }) {
       });
   }, []);
 
-  const authenticateWithToken = useCallback(
-    (token: string, cfg: AppConfig | null): string | null => {
-      if (!cfg || !Array.isArray(cfg.clients)) {
-        setLoginError('Configurația de acces nu este disponibilă.');
+  const authenticateViaApi = useCallback(
+    async (token: string, password: string): Promise<string | null> => {
+      try {
+        const { client } = await clientAuth(token, password);
+        const id = deriveClientId(client);
+        setIsTransitioning(true);
+        setLoginError('');
+        setClientId(id);
+        setClientName(client.name);
+        setClientType(client.type);
+        setActiveClient(client);
+        setActiveToken(client.access_token);
+        localStorage.setItem('azisunt_token', client.access_token);
+        loadData(client);
+
+        window.setTimeout(() => {
+          setIsAuthenticated(true);
+          setIsTransitioning(false);
+        }, 280);
+
+        return id;
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Autentificare eșuată.';
+        setLoginError(message);
         return null;
       }
-
-      const client = cfg.clients.find((entry) => entry.access_token === token.trim());
-      if (!client) {
-        setLoginError('Cod de acces invalid. Verifică și încearcă din nou.');
-        return null;
-      }
-      if (client.active === false) {
-        setLoginError('Contul este dezactivat. Contactează administratorul.');
-        return null;
-      }
-
-      const id = deriveClientId(client);
-      setIsTransitioning(true);
-      setLoginError('');
-      setClientId(id);
-      setClientName(client.name);
-      setClientType(client.type);
-      setActiveClient(client);
-      setActiveToken(token.trim());
-      localStorage.setItem('azisunt_token', token.trim());
-      loadData(client);
-
-      window.setTimeout(() => {
-        setIsAuthenticated(true);
-        setIsTransitioning(false);
-      }, 280);
-
-      return id;
     },
     [loadData],
   );
 
-  // Load config on mount + auto-login from localStorage
+  // Auto-login from localStorage
   useEffect(() => {
-    fetchConfig()
-      .then((cfg) => {
-        setConfig(cfg);
-        const savedToken = localStorage.getItem('azisunt_token');
-        if (savedToken) {
-          authenticateWithToken(savedToken, cfg);
-        }
-        setConfigReady(true);
-      })
-      .catch(() => {
-        setLoginError('Configurația nu a putut fi încărcată.');
-        setConfigReady(true);
+    const savedToken = localStorage.getItem('azisunt_token');
+    if (savedToken) {
+      authenticateViaApi(savedToken, '').catch(() => {
+        localStorage.removeItem('azisunt_token');
       });
-  }, [authenticateWithToken]);
+    }
+    setConfigReady(true);
+  }, [authenticateViaApi]);
 
   const login = useCallback(
-    (token: string): string | null => {
+    async (token: string, password: string): Promise<string | null> => {
       setLoginError('');
-      return authenticateWithToken(token, config);
+      return authenticateViaApi(token, password);
     },
-    [authenticateWithToken, config],
+    [authenticateViaApi],
   );
 
   const logout = useCallback(() => {
@@ -222,47 +208,19 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   );
 
   const addSource = useCallback(
-    (url: string): { success: boolean; error?: string } => {
-      const trimmedUrl = url.trim();
-      if (!trimmedUrl || !activeClient) {
-        return { success: false, error: 'Introdu un URL valid.' };
-      }
-      let parsed: URL;
+    async (url: string): Promise<{ success: boolean; error?: string }> => {
+      if (!activeToken) return { success: false, error: 'Nu ești autentificat.' };
       try {
-        parsed = new URL(trimmedUrl);
-      } catch {
-        return { success: false, error: 'URL invalid.' };
+        const { sources } = await addClientSource(activeToken, url);
+        setActiveClient((prev) => (prev ? { ...prev, sources } : prev));
+        setReportMsg('Sursa a fost adăugată.');
+        return { success: true };
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Nu am putut adăuga sursa.';
+        return { success: false, error: message };
       }
-      const host = parsed.hostname.toLowerCase();
-      if (!host.includes('glovo') && !host.includes('wolt') && !host.includes('bolt') && !host.includes('tazz')) {
-        return { success: false, error: 'Permise doar URL-uri Glovo, Wolt, Bolt Food sau Tazz.' };
-      }
-      const currentSources = activeClient.sources || [];
-      if (currentSources.includes(trimmedUrl)) {
-        return { success: false, error: 'Sursa există deja.' };
-      }
-
-      if (!config) return { success: false, error: 'Config indisponibil.' };
-
-      const newSources = [...currentSources, trimmedUrl];
-      const nextClients = config.clients.map((c) =>
-        c.access_token === activeClient.access_token ? { ...c, sources: newSources } : c,
-      );
-      const nextConfig: AppConfig = { ...config, clients: nextClients };
-
-      saveConfig(nextConfig)
-        .then(() => {
-          const updatedClient =
-            nextClients.find((c) => c.access_token === activeClient.access_token) || null;
-          setConfig(nextConfig);
-          setActiveClient(updatedClient);
-          setReportMsg('Sursele au fost salvate.');
-        })
-        .catch(() => setReportMsg('Nu am putut salva sursele.'));
-
-      return { success: true };
     },
-    [activeClient, config],
+    [activeToken],
   );
 
   const triggerDiscovery = useCallback(

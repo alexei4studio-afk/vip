@@ -7,6 +7,7 @@ export default function LoginPage() {
   const { login, loginError, isAuthenticated, clientId, isTransitioning } = useClient();
   const navigate = useNavigate();
   const [tokenInput, setTokenInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
 
   useEffect(() => {
     if (isAuthenticated && clientId) {
@@ -14,9 +15,9 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, clientId, navigate]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const id = login(tokenInput);
+    const id = await login(tokenInput, passwordInput);
     if (id) {
       navigate(`/dashboard/${id}`, { replace: true });
     }
@@ -61,6 +62,22 @@ export default function LoginPage() {
               className="w-full rounded-xl border border-apple-border bg-white px-4 py-3 text-apple-text transition-all placeholder:text-apple-muted/60 focus:border-apple-gold focus:ring-2 focus:ring-apple-gold/20"
               placeholder="Introduceți codul de acces"
               required
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="clientPassword"
+              className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-apple-muted"
+            >
+              Parolă
+            </label>
+            <input
+              id="clientPassword"
+              type="password"
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              className="w-full rounded-xl border border-apple-border bg-white px-4 py-3 text-apple-text transition-all placeholder:text-apple-muted/60 focus:border-apple-gold focus:ring-2 focus:ring-apple-gold/20"
+              placeholder="Introduceți parola"
             />
           </div>
           {loginError && (

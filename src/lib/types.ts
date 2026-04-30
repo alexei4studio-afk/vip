@@ -6,6 +6,7 @@ export type ClientConfig = {
   access_token: string;
   type: 'local' | 'national';
   active?: boolean;
+  password?: string;
   sources?: string[];
   subscription?: SubscriptionTier;
   location?: string;
