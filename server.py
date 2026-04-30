@@ -4,6 +4,7 @@ import subprocess
 import threading
 import time
 import glob
+import uuid
 from urllib.parse import urlparse
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -40,10 +41,12 @@ def save_config_data(data):
             portalocker.unlock(f)
 
 
-def find_client_by_token(token):
+def find_client_by_token(token, require_active=False):
     config = load_config_data()
     for client in config.get("clients", []):
         if client.get("access_token") == token:
+            if require_active and not client.get("active", True):
+                return None
             return client
     return None
 
@@ -199,9 +202,9 @@ def start_client_scraping():
         if not client_token:
             return jsonify({"error": "Missing access_token"}), 400
 
-        client = find_client_by_token(client_token)
+        client = find_client_by_token(client_token, require_active=True)
         if not client:
-            return jsonify({"error": "Client not found for provided token"}), 404
+            return jsonify({"error": "Client not found or inactive"}), 403
 
         invalid_sources = [url for url in client.get("sources", []) if not is_valid_manual_url(url)]
         if invalid_sources:
@@ -254,9 +257,9 @@ def report_status():
     token = request.args.get("access_token")
     if not token:
         return jsonify({"error": "Missing access_token"}), 400
-    client = find_client_by_token(token)
+    client = find_client_by_token(token, require_active=True)
     if not client:
-        return jsonify({"error": "Invalid token"}), 403
+        return jsonify({"error": "Client not found or inactive"}), 403
     job = REPORT_JOBS.get(token)
     if not job:
         return jsonify({"running": False, "logs": [], "pid": None, "exit_code": None})
@@ -268,9 +271,9 @@ def list_exports():
     token = request.args.get("access_token")
     if not token:
         return jsonify({"error": "Missing access_token"}), 400
-    client = find_client_by_token(token)
+    client = find_client_by_token(token, require_active=True)
     if not client:
-        return jsonify({"error": "Invalid token"}), 403
+        return jsonify({"error": "Client not found or inactive"}), 403
     return jsonify({"exports": list_archives_for_token(token)})
 
 
@@ -279,15 +282,57 @@ def download_export(filename):
     token = request.args.get("access_token")
     if not token:
         return jsonify({"error": "Missing access_token"}), 400
-    client = find_client_by_token(token)
+    client = find_client_by_token(token, require_active=True)
     if not client:
-        return jsonify({"error": "Invalid token"}), 403
+        return jsonify({"error": "Client not found or inactive"}), 403
     safe_name = os.path.basename(filename)
     if not safe_name.endswith(".json"):
         return jsonify({"error": "Invalid file type"}), 400
     if not safe_name.startswith(f"{token}_"):
         return jsonify({"error": "Access denied"}), 403
     return send_from_directory(EXPORTS_DIR, safe_name, as_attachment=True)
+
+
+@app.route('/api/admin/add', methods=['POST'])
+def add_client():
+    payload = request.json or {}
+    name = (payload.get("name") or "").strip()
+    token = (payload.get("access_token") or "").strip()
+    glovo_url = (payload.get("glovo_url") or "").strip()
+    wolt_url = (payload.get("wolt_url") or "").strip()
+
+    if not name or not token:
+        return jsonify({"error": "Name and access_token are required"}), 400
+
+    config = load_config_data()
+    for c in config.get("clients", []):
+        if c.get("access_token") == token:
+            return jsonify({"error": "Token already exists"}), 409
+
+    sources = []
+    for url in [glovo_url, wolt_url]:
+        if url:
+            if not is_valid_manual_url(url):
+                return jsonify({"error": f"Invalid URL: {url}"}), 400
+            sources.append(url)
+
+    new_client = {
+        "id": uuid.uuid4().hex[:8],
+        "name": name,
+        "access_token": token,
+        "type": "local",
+        "active": True,
+        "sources": sources,
+    }
+
+    config.setdefault("clients", []).append(new_client)
+    save_config_data(config)
+
+    return jsonify({
+        "message": "Client added",
+        "client": new_client,
+        "dashboard_url": f"/dashboard/{token}",
+    }), 201
 
 
 @app.route('/dashboard/<path:path>')

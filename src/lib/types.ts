@@ -3,6 +3,7 @@ export type ClientConfig = {
   name: string;
   access_token: string;
   type: 'local' | 'national';
+  active?: boolean;
   sources?: string[];
 };
 

@@ -102,6 +102,10 @@ export function ClientProvider({ children }: { children: ReactNode }) {
         setLoginError('Cod de acces invalid. Verifică și încearcă din nou.');
         return null;
       }
+      if (client.active === false) {
+        setLoginError('Contul este dezactivat. Contactează administratorul.');
+        return null;
+      }
 
       const id = deriveClientId(client);
       setIsTransitioning(true);
