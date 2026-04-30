@@ -1,7 +1,21 @@
 {
+  "version": 2,
   "rewrites": [
-    { "source": "/admin", "destination": "/admin/index.html" },
-    { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/((?!admin|api).*)", "destination": "/index.html" }
+    {
+      "source": "/api/(.*)",
+      "destination": "server.py"
+    },
+    {
+      "source": "/admin",
+      "destination": "admin/index.html"
+    },
+    {
+      "source": "/admin/(.*)",
+      "destination": "admin/index.html"
+    },
+    {
+      "source": "/((?!api|admin).*)",
+      "destination": "/dist/index.html"
+    }
   ]
 }
