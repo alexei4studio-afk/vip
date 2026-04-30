@@ -15,9 +15,27 @@ CORS(app)
 
 ADMIN_DIR = os.path.join(os.path.dirname(__file__), 'admin')
 
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'public', 'config.json')
-DATA_DIR = os.path.join(os.path.dirname(__file__), 'public', 'data')
-EXPORTS_DIR = os.path.join(os.path.dirname(__file__), 'exports')
+# Detectăm dacă rulăm pe Vercel
+IS_VERCEL = "VERCEL" in os.environ
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Config-ul rămâne în public (îl citești de acolo), 
+# dar dacă vrei să îl SALVEZI, pe Vercel va da eroare.
+CONFIG_PATH = os.path.join(BASE_DIR, 'public', 'config.json')
+
+if IS_VERCEL:
+    # Pe Vercel, DATA și EXPORTS trebuie să fie în /tmp
+    DATA_DIR = '/tmp/data'
+    EXPORTS_DIR = '/tmp/exports'
+    # Creăm folderele în /tmp la pornire dacă nu există
+    os.makedirs(DATA_DIR, exist_ok=True)
+    os.makedirs(EXPORTS_DIR, exist_ok=True)
+else:
+    # Local rămâne cum era
+    DATA_DIR = os.path.join(BASE_DIR, 'public', 'data')
+    EXPORTS_DIR = os.path.join(BASE_DIR, 'exports')
+
 REPORT_JOBS = {}
 DISCOVERY_JOBS = {}
 
