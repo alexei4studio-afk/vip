@@ -1,7 +1,13 @@
 import type { AppConfig, ClientConfig, DataRecord, ArchivedReport } from './types';
 
 export function getApiBaseUrl(): string {
-  return `${window.location.protocol}//${window.location.hostname}:5000`;
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  if (import.meta.env.DEV) {
+    return `${window.location.protocol}//${window.location.hostname}:5000`;
+  }
+  return window.location.origin;
 }
 
 export async function fetchConfig(): Promise<AppConfig> {
