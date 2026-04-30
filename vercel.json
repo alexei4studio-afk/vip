@@ -2,30 +2,21 @@
   "version": 2,
   "builds": [
     {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    },
+    {
       "src": "server.py",
       "use": "@vercel/python"
     }
   ],
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "server.py"
-    },
-    {
-      "source": "/admin",
-      "destination": "admin/index.html"
-    },
-    {
-      "source": "/admin/(.*)",
-      "destination": "admin/index.html"
-    },
-    {
-      "source": "/static/(.*)",
-      "destination": "/dist/static/$1"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "server.py"
-    }
+  "routes": [
+    { "src": "/api/(.*)", "dest": "server.py" },
+    { "src": "/admin(.*)", "dest": "server.py" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }

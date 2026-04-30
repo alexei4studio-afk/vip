@@ -10,29 +10,23 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import portalocker
 
-app = Flask(__name__, static_folder='dist')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DIST_DIR = os.path.join(BASE_DIR, 'dist')
+ADMIN_DIR = os.path.join(BASE_DIR, 'admin')
+
+app = Flask(__name__, static_folder=DIST_DIR)
 CORS(app)
 
-ADMIN_DIR = os.path.join(os.path.dirname(__file__), 'admin')
-
-# Detectăm dacă rulăm pe Vercel
 IS_VERCEL = "VERCEL" in os.environ
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Config-ul rămâne în public (îl citești de acolo), 
-# dar dacă vrei să îl SALVEZI, pe Vercel va da eroare.
 CONFIG_PATH = os.path.join(BASE_DIR, 'public', 'config.json')
 
 if IS_VERCEL:
-    # Pe Vercel, DATA și EXPORTS trebuie să fie în /tmp
     DATA_DIR = '/tmp/data'
     EXPORTS_DIR = '/tmp/exports'
-    # Creăm folderele în /tmp la pornire dacă nu există
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(EXPORTS_DIR, exist_ok=True)
 else:
-    # Local rămâne cum era
     DATA_DIR = os.path.join(BASE_DIR, 'public', 'data')
     EXPORTS_DIR = os.path.join(BASE_DIR, 'exports')
 
@@ -45,9 +39,13 @@ def load_config_data():
         return {"clients": []}
     try:
         with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-            # Comentăm portalocker temporar pentru a vedea dacă el cauzează crash-ul
-            # portalocker.lock(f, portalocker.LOCK_SH) 
-            return json.load(f)
+            if not IS_VERCEL:
+                portalocker.lock(f, portalocker.LOCK_SH)
+            try:
+                return json.load(f)
+            finally:
+                if not IS_VERCEL:
+                    portalocker.unlock(f)
     except Exception as e:
         print(f"Error loading config: {e}")
         return {"clients": []}
@@ -188,10 +186,8 @@ def list_archives_for_token(token):
         for path in files
     ]
 
-@app.route('/')
-def serve_spa_root():
-    return send_from_directory('dist', 'index.html')
 
+# ── Admin routes ──
 
 @app.route('/admin')
 @app.route('/admin/')
@@ -204,11 +200,14 @@ def admin_static(filename):
     return send_from_directory(ADMIN_DIR, filename)
 
 
+# ── API routes ──
+
 @app.route('/api/config', methods=['GET'])
 def get_config():
     if not os.path.exists(CONFIG_PATH):
         return jsonify({"error": "Config file not found"}), 404
     return jsonify(load_config_data())
+
 
 @app.route('/api/config', methods=['POST'])
 def save_config():
@@ -218,6 +217,7 @@ def save_config():
         return jsonify({"message": "Config saved successfully"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/api/start', methods=['POST'])
 def start_scraping():
@@ -232,7 +232,7 @@ def start_scraping():
 
         process_env = os.environ.copy()
         process_env["PYTHONIOENCODING"] = "utf-8"
-        subprocess.Popen(cmd, cwd=os.path.dirname(__file__), env=process_env)
+        subprocess.Popen(cmd, cwd=BASE_DIR, env=process_env)
         return jsonify({"message": "Scraping started in background", "target_url": target_url})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -277,7 +277,7 @@ def start_client_scraping():
         process_env["PYTHONIOENCODING"] = "utf-8"
         process = subprocess.Popen(
             cmd,
-            cwd=os.path.dirname(__file__),
+            cwd=BASE_DIR,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -467,7 +467,7 @@ def discover_competitors():
         process_env = os.environ.copy()
         process_env["PYTHONIOENCODING"] = "utf-8"
         process = subprocess.Popen(
-            cmd, cwd=os.path.dirname(__file__),
+            cmd, cwd=BASE_DIR,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, encoding="utf-8", errors="replace", bufsize=1,
             env=process_env,
@@ -518,37 +518,22 @@ def discover_results():
         return jsonify(json.load(f))
 
 
+# ── SPA catch-all (local dev only; on Vercel, static files handle this) ──
+
+@app.route('/')
+def serve_spa_root():
+    return send_from_directory(DIST_DIR, 'index.html')
+
+
 @app.route('/<path:path>')
 def spa_catch_all(path):
     if path.startswith('api/') or path.startswith('admin'):
         return jsonify({"error": "Not found"}), 404
-    dist_dir = os.path.join(os.path.dirname(__file__), 'dist')
-    full_path = os.path.join(dist_dir, path)
+    full_path = os.path.join(DIST_DIR, path)
     if os.path.isfile(full_path):
-        return send_from_directory('dist', path)
-    return send_from_directory('dist', 'index.html')
+        return send_from_directory(DIST_DIR, path)
+    return send_from_directory(DIST_DIR, 'index.html')
 
-# Adaugă asta pentru a te asigura că Flask găsește folderul dist corect pe Vercel
-dist_dir = os.path.join(os.path.dirname(__file__), 'dist')
-admin_dir = os.path.join(os.path.dirname(__file__), 'admin')
-
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
-def catch_all(path):
-    # Dacă e cerere de admin
-    if path.startswith('admin'):
-        return send_from_directory(admin_dir, 'index.html')
-    
-    # Verificăm dacă fișierul există în dist (js, css, imagini)
-    full_path = os.path.join(dist_dir, path)
-    if path != "" and os.path.exists(full_path):
-        return send_from_directory(dist_dir, path)
-    
-    # Altfel, returnăm index.html din dist (pentru React Routing)
-    return send_from_directory(dist_dir, 'index.html')
-
-# Aceasta este variabila pe care o caută Vercel
-app = app
 
 if __name__ == '__main__':
     print("Starting server on http://localhost:5000")
