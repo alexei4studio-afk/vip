@@ -1,10 +1,11 @@
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Play, FileDown } from 'lucide-react';
+import { LogOut, Play, FileDown, Search } from 'lucide-react';
 import { useClient } from '../contexts/ClientContext';
 import { generateExecutivePdf } from '../lib/pdfReport';
 import DataTable from './DataTable';
 import StrategySection from './StrategySection';
 import SourcesSection from './SourcesSection';
+import DiscoverySection from './DiscoverySection';
 import LiveStatus from './LiveStatus';
 import ArchiveSection from './ArchiveSection';
 
@@ -18,6 +19,10 @@ export default function DashboardPage() {
     isGeneratingReport,
     isReportRunning,
     triggerReport,
+    hasDiscovery,
+    hasDelivery,
+    isDiscoveryRunning,
+    triggerDiscovery,
   } = useClient();
 
   const navigate = useNavigate();
@@ -62,28 +67,43 @@ export default function DashboardPage() {
 
         {/* Action Bar */}
         <div className="mb-8 flex flex-col gap-3 sm:flex-row">
-          <button
-            onClick={handleGenerateReport}
-            disabled={isGeneratingReport || isReportRunning}
-            className="flex items-center justify-center gap-2 rounded-full bg-apple-text px-6 py-2.5 text-sm font-semibold text-white transition-all hover:bg-apple-text/90 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Play className="h-4 w-4" />
-            {isGeneratingReport || isReportRunning ? 'Se generează...' : 'Generează Raport'}
-          </button>
-          <button
-            onClick={handleDownloadPdf}
-            className="flex items-center justify-center gap-2 rounded-full border-2 border-apple-gold px-6 py-2.5 text-sm font-semibold text-apple-gold transition-all hover:bg-apple-gold hover:text-white active:scale-[0.97]"
-          >
-            <FileDown className="h-4 w-4" />
-            Descarcă Raport PDF
-          </button>
+          {hasDelivery && (
+            <button
+              onClick={handleGenerateReport}
+              disabled={isGeneratingReport || isReportRunning}
+              className="flex items-center justify-center gap-2 rounded-full bg-apple-text px-6 py-2.5 text-sm font-semibold text-white transition-all hover:bg-apple-text/90 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Play className="h-4 w-4" />
+              {isGeneratingReport || isReportRunning ? 'Se generează...' : 'Generează Raport'}
+            </button>
+          )}
+          {hasDiscovery && (
+            <button
+              onClick={() => triggerDiscovery('local')}
+              disabled={isDiscoveryRunning}
+              className="flex items-center justify-center gap-2 rounded-full border-2 border-cyan-500 px-6 py-2.5 text-sm font-semibold text-cyan-600 transition-all hover:bg-cyan-500 hover:text-white active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Search className="h-4 w-4" />
+              {isDiscoveryRunning ? 'Se caută...' : 'Descoperă Competitori Noi'}
+            </button>
+          )}
+          {hasDelivery && (
+            <button
+              onClick={handleDownloadPdf}
+              className="flex items-center justify-center gap-2 rounded-full border-2 border-apple-gold px-6 py-2.5 text-sm font-semibold text-apple-gold transition-all hover:bg-apple-gold hover:text-white active:scale-[0.97]"
+            >
+              <FileDown className="h-4 w-4" />
+              Descarcă Raport PDF
+            </button>
+          )}
         </div>
 
-        <DataTable />
+        {hasDelivery && <DataTable />}
         <StrategySection />
         <SourcesSection />
+        {hasDiscovery && <DiscoverySection />}
         <LiveStatus />
-        <ArchiveSection />
+        {hasDelivery && <ArchiveSection />}
 
         {/* Footer */}
         <footer className="mt-12 pb-6 text-center text-[11px] text-apple-muted/50">

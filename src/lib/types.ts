@@ -1,3 +1,5 @@
+export type SubscriptionTier = 'online' | 'delivery' | 'complet';
+
 export type ClientConfig = {
   id?: string;
   name: string;
@@ -5,6 +7,25 @@ export type ClientConfig = {
   type: 'local' | 'national';
   active?: boolean;
   sources?: string[];
+  subscription?: SubscriptionTier;
+  location?: string;
+  location_radius?: 'local' | 'global';
+  keywords?: string[];
+  platforme?: string[];
+};
+
+export type DiscoverySuggestion = {
+  name: string;
+  url: string;
+  platform: string;
+  distance?: string;
+  category?: string;
+};
+
+export type DiscoveryResult = {
+  suggestions: DiscoverySuggestion[];
+  searched_at: string | null;
+  scope: 'local' | 'global' | null;
 };
 
 export type AppConfig = {

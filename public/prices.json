@@ -1,0 +1,19 @@
+{
+    "last_update": "2026-04-30 02:56",
+    "alerts": [
+        {
+            "store": "Competitor 1",
+            "product": "Produs X",
+            "old_price": "150 RON",
+            "new_price": "120 RON",
+            "change": "-20%"
+        },
+        {
+            "store": "Competitor 2",
+            "product": "Produs Y",
+            "old_price": "300 RON",
+            "new_price": "350 RON",
+            "change": "+16%"
+        }
+    ]
+}

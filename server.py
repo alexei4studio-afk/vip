@@ -17,6 +17,7 @@ CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'public', 'config.json')
 DATA_DIR = os.path.join(os.path.dirname(__file__), 'public', 'data')
 EXPORTS_DIR = os.path.join(os.path.dirname(__file__), 'exports')
 REPORT_JOBS = {}
+DISCOVERY_JOBS = {}
 
 
 def load_config_data():
@@ -51,6 +52,16 @@ def find_client_by_token(token, require_active=False):
     return None
 
 
+def client_has_discovery(client):
+    sub = client.get("subscription", "delivery")
+    return sub in ("online", "complet")
+
+
+def client_has_delivery(client):
+    sub = client.get("subscription", "delivery")
+    return sub in ("delivery", "complet")
+
+
 def is_valid_manual_url(url):
     try:
         parsed = urlparse(url)
@@ -59,7 +70,7 @@ def is_valid_manual_url(url):
     if parsed.scheme not in {"http", "https"}:
         return False
     host = (parsed.netloc or "").lower()
-    return "glovo" in host or "wolt" in host
+    return any(p in host for p in ("glovo", "wolt", "bolt", "tazz", "food.bolt"))
 
 
 def client_output_candidates(client):
@@ -206,6 +217,9 @@ def start_client_scraping():
         if not client:
             return jsonify({"error": "Client not found or inactive"}), 403
 
+        if not client_has_delivery(client):
+            return jsonify({"error": "Abonamentul clientului nu include monitorizare delivery."}), 403
+
         invalid_sources = [url for url in client.get("sources", []) if not is_valid_manual_url(url)]
         if invalid_sources:
             return jsonify({"error": "Invalid source URLs", "invalid_sources": invalid_sources}), 400
@@ -300,9 +314,23 @@ def add_client():
     token = (payload.get("access_token") or "").strip()
     glovo_url = (payload.get("glovo_url") or "").strip()
     wolt_url = (payload.get("wolt_url") or "").strip()
+    subscription = (payload.get("subscription") or "delivery").strip()
+    location = (payload.get("location") or "").strip()
+    location_radius = (payload.get("location_radius") or "local").strip()
+    keywords = payload.get("keywords") or []
+    platforme = payload.get("platforme") or ["glovo"]
 
     if not name or not token:
         return jsonify({"error": "Name and access_token are required"}), 400
+
+    if subscription not in ("online", "delivery", "complet"):
+        return jsonify({"error": "Invalid subscription type"}), 400
+
+    if subscription in ("online", "complet") and not location:
+        return jsonify({"error": "Locația este obligatorie pentru abonamentul selectat."}), 400
+
+    if location_radius not in ("local", "global"):
+        return jsonify({"error": "Invalid location_radius"}), 400
 
     config = load_config_data()
     for c in config.get("clients", []):
@@ -323,6 +351,11 @@ def add_client():
         "type": "local",
         "active": True,
         "sources": sources,
+        "subscription": subscription,
+        "location": location,
+        "location_radius": location_radius,
+        "keywords": keywords if isinstance(keywords, list) else [],
+        "platforme": platforme if isinstance(platforme, list) else ["glovo"],
     }
 
     config.setdefault("clients", []).append(new_client)
@@ -333,6 +366,112 @@ def add_client():
         "client": new_client,
         "dashboard_url": f"/dashboard/{token}",
     }), 201
+
+
+def start_discovery_reader(token, process):
+    def _reader():
+        try:
+            if process.stdout:
+                for line in iter(process.stdout.readline, ""):
+                    if not line:
+                        break
+                    job = DISCOVERY_JOBS.get(token)
+                    if not job:
+                        break
+                    job["logs"].append(line.rstrip())
+                    if len(job["logs"]) > 200:
+                        job["logs"] = job["logs"][-200:]
+            process.wait()
+            job = DISCOVERY_JOBS.get(token)
+            if job:
+                job["running"] = False
+                job["last_finished_at"] = time.time()
+                job["exit_code"] = process.returncode
+                job["logs"].append(f"[DONE] Exit code {process.returncode}")
+        except Exception as err:
+            job = DISCOVERY_JOBS.get(token)
+            if job:
+                job["logs"].append(f"[ERROR] {err}")
+
+    thread = threading.Thread(target=_reader, daemon=True)
+    thread.start()
+
+
+@app.route('/api/discover', methods=['POST'])
+def discover_competitors():
+    try:
+        payload = request.json or {}
+        client_token = payload.get('access_token')
+        scope = payload.get('scope', 'local')
+
+        if not client_token:
+            return jsonify({"error": "Missing access_token"}), 400
+        if scope not in ('local', 'global'):
+            return jsonify({"error": "Invalid scope"}), 400
+
+        client = find_client_by_token(client_token, require_active=True)
+        if not client:
+            return jsonify({"error": "Client not found or inactive"}), 403
+        if not client_has_discovery(client):
+            return jsonify({"error": "Abonamentul nu include descoperire competitori."}), 403
+
+        job = DISCOVERY_JOBS.get(client_token)
+        if job and job.get("running"):
+            return jsonify({"error": "Discovery already running for this client"}), 409
+
+        cmd = ['python', 'scrape.py', '--client-token', client_token, '--discover', '--scope', scope]
+        process_env = os.environ.copy()
+        process_env["PYTHONIOENCODING"] = "utf-8"
+        process = subprocess.Popen(
+            cmd, cwd=os.path.dirname(__file__),
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding="utf-8", errors="replace", bufsize=1,
+            env=process_env,
+        )
+        DISCOVERY_JOBS[client_token] = {
+            "running": True,
+            "started_at": time.time(),
+            "last_finished_at": None,
+            "exit_code": None,
+            "logs": [f"[START] Discovery started for {client_token} (scope={scope})"],
+            "pid": process.pid,
+        }
+        start_discovery_reader(client_token, process)
+        return jsonify({"message": "Discovery started", "access_token": client_token, "pid": process.pid})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/discover-status', methods=['GET'])
+def discover_status():
+    token = request.args.get("access_token")
+    if not token:
+        return jsonify({"error": "Missing access_token"}), 400
+    client = find_client_by_token(token, require_active=True)
+    if not client:
+        return jsonify({"error": "Client not found or inactive"}), 403
+    job = DISCOVERY_JOBS.get(token)
+    if not job:
+        return jsonify({"running": False, "logs": [], "pid": None, "exit_code": None})
+    return jsonify(job)
+
+
+@app.route('/api/discover-results', methods=['GET'])
+def discover_results():
+    token = request.args.get("access_token")
+    if not token:
+        return jsonify({"error": "Missing access_token"}), 400
+    client = find_client_by_token(token, require_active=True)
+    if not client:
+        return jsonify({"error": "Client not found or inactive"}), 403
+
+    client_id = client.get("id") or client.get("name", "").lower().replace(" ", "_")
+    result_file = os.path.join(DATA_DIR, f"discover_{client_id}.json")
+    if not os.path.exists(result_file):
+        return jsonify({"suggestions": [], "searched_at": None, "scope": None})
+
+    with open(result_file, "r", encoding="utf-8") as f:
+        return jsonify(json.load(f))
 
 
 @app.route('/dashboard/<path:path>')

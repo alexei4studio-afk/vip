@@ -30,6 +30,38 @@
                     <label class="block text-sm text-slate-400 mb-1">Wolt URL</label>
                     <input name="wolt_url" type="url" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="https://wolt.com/...">
                 </div>
+
+                <div class="md:col-span-2 border-t border-slate-700/50 pt-4 mt-2">
+                    <h3 class="text-sm font-semibold text-cyan-400 mb-3">Abonament & Discovery</h3>
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-400 mb-1">Abonament *</label>
+                    <select name="subscription" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500">
+                        <option value="delivery">Ab 2 - Delivery (Monitorizare platforme)</option>
+                        <option value="online">Ab 1 - Online (Descoperire competitori)</option>
+                        <option value="complet">Ab 3 - Complet (Delivery + Online)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-400 mb-1">Locație (Oraș / Cartier)</label>
+                    <input name="location" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="e.g. București, Sector 3">
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-400 mb-1">Rază Descoperire</label>
+                    <select name="location_radius" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500">
+                        <option value="local">Local (~3km)</option>
+                        <option value="global">Global (Oraș)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-400 mb-1">Cuvinte cheie (separate prin virgulă)</label>
+                    <input name="keywords" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="e.g. pizza napoletana, margherita">
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-400 mb-1">Platforme (separate prin virgulă)</label>
+                    <input name="platforme" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="e.g. glovo, tazz, wolt, bolt" value="glovo">
+                </div>
+
                 <div class="md:col-span-2 flex items-center gap-4">
                     <button type="submit" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 px-8 rounded-lg transition-colors">Add Client</button>
                     <span id="addMsg" class="text-sm hidden"></span>
@@ -66,15 +98,33 @@
         document.getElementById('addClientForm').addEventListener('submit', (e) => {
             e.preventDefault();
             const form = e.target;
+            const subscription = form.subscription.value;
+            const location = form.location.value.trim();
+            const keywordsRaw = form.keywords.value.trim();
+            const platformeRaw = form.platforme.value.trim();
+
+            const msg = document.getElementById('addMsg');
+            const linkBox = document.getElementById('dashboardLink');
+            const dashLink = document.getElementById('dashLink');
+
+            if ((subscription === 'online' || subscription === 'complet') && !location) {
+                msg.textContent = 'Locația este obligatorie pentru abonamentul selectat.';
+                msg.className = 'text-sm text-red-400';
+                msg.classList.remove('hidden');
+                return;
+            }
+
             const body = {
                 name: form.name.value.trim(),
                 access_token: form.access_token.value.trim(),
                 glovo_url: form.glovo_url.value.trim(),
                 wolt_url: form.wolt_url.value.trim(),
+                subscription: subscription,
+                location: location,
+                location_radius: form.location_radius.value,
+                keywords: keywordsRaw ? keywordsRaw.split(',').map(k => k.trim()).filter(Boolean) : [],
+                platforme: platformeRaw ? platformeRaw.split(',').map(p => p.trim()).filter(Boolean) : ['glovo'],
             };
-            const msg = document.getElementById('addMsg');
-            const linkBox = document.getElementById('dashboardLink');
-            const dashLink = document.getElementById('dashLink');
 
             fetch('/api/admin/add', {
                 method: 'POST',

@@ -1,4 +1,4 @@
-import type { AppConfig, ClientConfig, DataRecord, ArchivedReport } from './types';
+import type { AppConfig, ClientConfig, DataRecord, ArchivedReport, DiscoveryResult } from './types';
 
 export function getApiBaseUrl(): string {
   if (import.meta.env.VITE_API_URL) {
@@ -98,4 +98,39 @@ export async function loadClientDataJson(
 export function getExportDownloadUrl(filename: string, token: string): string {
   const apiBase = getApiBaseUrl();
   return `${apiBase}/api/exports/${encodeURIComponent(filename)}?access_token=${encodeURIComponent(token)}`;
+}
+
+export async function startDiscovery(
+  token: string,
+  scope: 'local' | 'global' = 'local',
+): Promise<{ message?: string; error?: string; pid?: number }> {
+  const apiBase = getApiBaseUrl();
+  const res = await fetch(`${apiBase}/api/discover`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ access_token: token, scope }),
+  });
+  const payload = await res.json();
+  if (!res.ok) throw new Error(payload.error || 'Discovery failed');
+  return payload;
+}
+
+export async function fetchDiscoveryStatus(
+  token: string,
+): Promise<{ running: boolean; logs: string[] }> {
+  const apiBase = getApiBaseUrl();
+  const res = await fetch(
+    `${apiBase}/api/discover-status?access_token=${encodeURIComponent(token)}`,
+  );
+  return await res.json();
+}
+
+export async function fetchDiscoveryResults(
+  token: string,
+): Promise<DiscoveryResult> {
+  const apiBase = getApiBaseUrl();
+  const res = await fetch(
+    `${apiBase}/api/discover-results?access_token=${encodeURIComponent(token)}`,
+  );
+  return await res.json();
 }

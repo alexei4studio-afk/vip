@@ -6,15 +6,18 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { AppConfig, ArchivedReport, ClientConfig, DataRecord } from '../lib/types';
+import type { AppConfig, ArchivedReport, ClientConfig, DataRecord, DiscoverySuggestion, SubscriptionTier } from '../lib/types';
 import { deriveClientId } from '../lib/utils';
 import {
   fetchConfig,
   fetchExports,
   fetchReportStatus,
+  fetchDiscoveryStatus,
+  fetchDiscoveryResults,
   loadClientDataJson,
   saveConfig,
   startClientScraping,
+  startDiscovery,
 } from '../lib/api';
 
 interface ClientContextValue {
@@ -37,10 +40,19 @@ interface ClientContextValue {
   isReportRunning: boolean;
   archivedReports: ArchivedReport[];
 
+  subscriptionTier: SubscriptionTier;
+  hasDiscovery: boolean;
+  hasDelivery: boolean;
+
+  discoverySuggestions: DiscoverySuggestion[];
+  isDiscoveryRunning: boolean;
+  discoveryLogs: string[];
+
   login: (token: string) => string | null;
   loginError: string;
   logout: () => void;
   triggerReport: (force?: boolean) => void;
+  triggerDiscovery: (scope?: 'local' | 'global') => void;
   addSource: (url: string) => { success: boolean; error?: string };
   setReportMsg: (msg: string) => void;
 }
@@ -73,6 +85,10 @@ export function ClientProvider({ children }: { children: ReactNode }) {
   const [reportLogs, setReportLogs] = useState<string[]>([]);
   const [isReportRunning, setIsReportRunning] = useState(false);
   const [archivedReports, setArchivedReports] = useState<ArchivedReport[]>([]);
+
+  const [discoverySuggestions, setDiscoverySuggestions] = useState<DiscoverySuggestion[]>([]);
+  const [isDiscoveryRunning, setIsDiscoveryRunning] = useState(false);
+  const [discoveryLogs, setDiscoveryLogs] = useState<string[]>([]);
 
   const [configReady, setConfigReady] = useState(false);
 
@@ -169,6 +185,9 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     setIsReportRunning(false);
     setArchivedReports([]);
     setLoginError('');
+    setDiscoverySuggestions([]);
+    setIsDiscoveryRunning(false);
+    setDiscoveryLogs([]);
   }, []);
 
   const triggerReport = useCallback(
@@ -215,8 +234,8 @@ export function ClientProvider({ children }: { children: ReactNode }) {
         return { success: false, error: 'URL invalid.' };
       }
       const host = parsed.hostname.toLowerCase();
-      if (!host.includes('glovo') && !host.includes('wolt')) {
-        return { success: false, error: 'Permise doar URL-uri Glovo sau Wolt.' };
+      if (!host.includes('glovo') && !host.includes('wolt') && !host.includes('bolt') && !host.includes('tazz')) {
+        return { success: false, error: 'Permise doar URL-uri Glovo, Wolt, Bolt Food sau Tazz.' };
       }
       const currentSources = activeClient.sources || [];
       if (currentSources.includes(trimmedUrl)) {
@@ -244,6 +263,21 @@ export function ClientProvider({ children }: { children: ReactNode }) {
       return { success: true };
     },
     [activeClient, config],
+  );
+
+  const triggerDiscovery = useCallback(
+    (scope: 'local' | 'global' = 'local') => {
+      if (!activeToken) return;
+      setReportMsg('');
+      startDiscovery(activeToken, scope)
+        .then(() => {
+          setIsDiscoveryRunning(true);
+          setDiscoveryLogs([]);
+          setReportMsg('Căutarea de competitori a fost pornită.');
+        })
+        .catch((err) => setReportMsg(err.message || 'Nu am putut porni descoperirea.'));
+    },
+    [activeToken],
   );
 
   // Poll report status
@@ -278,6 +312,33 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     }
   }, [isReportRunning, activeToken, refreshArchives]);
 
+  const subscriptionTier: SubscriptionTier = activeClient?.subscription || 'delivery';
+  const hasDiscovery = subscriptionTier === 'online' || subscriptionTier === 'complet';
+  const hasDelivery = subscriptionTier === 'delivery' || subscriptionTier === 'complet';
+
+  // Poll discovery status
+  useEffect(() => {
+    if (!activeToken || !hasDiscovery) return;
+    const timer = window.setInterval(() => {
+      fetchDiscoveryStatus(activeToken)
+        .then((status) => {
+          setIsDiscoveryRunning(Boolean(status.running));
+          setDiscoveryLogs(Array.isArray(status.logs) ? status.logs : []);
+        })
+        .catch(() => {});
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [activeToken, hasDiscovery]);
+
+  // Load discovery results when discovery finishes
+  useEffect(() => {
+    if (!isDiscoveryRunning && activeToken && hasDiscovery) {
+      fetchDiscoveryResults(activeToken)
+        .then((result) => setDiscoverySuggestions(result.suggestions || []))
+        .catch(() => setDiscoverySuggestions([]));
+    }
+  }, [isDiscoveryRunning, activeToken, hasDiscovery]);
+
   if (!configReady) return null;
 
   return (
@@ -299,10 +360,17 @@ export function ClientProvider({ children }: { children: ReactNode }) {
         reportLogs,
         isReportRunning,
         archivedReports,
+        subscriptionTier,
+        hasDiscovery,
+        hasDelivery,
+        discoverySuggestions,
+        isDiscoveryRunning,
+        discoveryLogs,
         login,
         loginError,
         logout,
         triggerReport,
+        triggerDiscovery,
         addSource,
         setReportMsg,
       }}

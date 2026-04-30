@@ -452,11 +452,113 @@ async def process_national_client(client, agent_llm, groq_client, browser):
     print(f"Salvat în {output_file}")
 
 
+async def process_discovery(client, scope, agent_llm, groq_client, browser):
+    print(f"--- Discovery competitori pentru: {client['name']} (scope={scope}) ---")
+    location = client.get("location", "București")
+    keywords = client.get("keywords", [])
+    keywords_str = ", ".join(keywords) if keywords else client.get("name", "restaurant")
+    platforme = client.get("platforme", ["glovo"])
+    platforme_str = ", ".join(platforme)
+
+    if scope == "local":
+        radius_desc = f"rază de ~3km în jurul zonei {location}"
+    else:
+        radius_desc = f"pe întregul oraș {location.split(',')[0].strip()}"
+
+    platform_urls = {
+        "glovo": "glovoapp.com",
+        "wolt": "wolt.com",
+        "tazz": "tazz.ro",
+        "bolt": "food.bolt.eu",
+    }
+    search_targets = [platform_urls.get(p.lower(), p) for p in platforme]
+    search_targets_str = ", ".join(search_targets)
+
+    task = f"""
+    Caută pe platformele de livrare: {search_targets_str}
+    Zona: {location}, {radius_desc}.
+    Caută afaceri similare cu: {keywords_str}.
+    Pentru fiecare competitor găsit, extrage:
+    - Numele afacerii
+    - URL-ul complet pe platformă
+    - Platforma (Glovo/Wolt/Tazz/Bolt Food)
+    - Categoria (ex: pizza, florărie, restaurant etc.)
+    Returnează text simplu, o linie per competitor, format:
+    Nume | URL | Platforma | Categoria
+    Găsește minimum 5 competitori dacă este posibil.
+    """
+
+    client_id = client.get("id") or client.get("name", "").lower().replace(" ", "_")
+    output_file = f"public/data/discover_{client_id}.json"
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    try:
+        agent = Agent(task=task, llm=agent_llm, browser=browser)
+        history = await agent.run()
+        result_text = (history.final_result() or "").strip()
+        if not result_text:
+            raise RuntimeError("Agentul nu a returnat rezultate de discovery.")
+    except Exception as err:
+        print(f"Discovery eșuat: {err}")
+        write_json(output_file, {"suggestions": [], "searched_at": now, "scope": scope, "error": str(err)})
+        return
+
+    strategy_prompt = f"""
+    Ești expert în analiza pieței.
+    Iată rezultatele de discovery pentru competitori similari cu '{client["name"]}' în '{location}':
+    {result_text}
+
+    Returnează JSON valid strict cu lista de competitori găsiți:
+    {{
+      "suggestions": [
+        {{
+          "name": "Numele afacerii",
+          "url": "URL complet pe platformă",
+          "platform": "Glovo/Wolt/Tazz/Bolt Food",
+          "category": "categoria"
+        }}
+      ],
+      "searched_at": "{now}",
+      "scope": "{scope}"
+    }}
+    Dacă un URL nu este complet sau valid, omite-l.
+    Elimină duplicatele.
+    """
+
+    try:
+        strategy_content = invoke_strategy_groq(groq_client, strategy_prompt)
+        payload = json.loads(strategy_content)
+    except Exception as parse_err:
+        print(f"Parsare discovery eșuată: {parse_err}")
+        lines = [line.strip() for line in result_text.split("\n") if "|" in line]
+        suggestions = []
+        for line in lines:
+            parts = [p.strip() for p in line.split("|")]
+            if len(parts) >= 3:
+                suggestions.append({
+                    "name": parts[0],
+                    "url": parts[1],
+                    "platform": parts[2],
+                    "category": parts[3] if len(parts) > 3 else "",
+                })
+        payload = {"suggestions": suggestions, "searched_at": now, "scope": scope}
+
+    if "searched_at" not in payload:
+        payload["searched_at"] = now
+    if "scope" not in payload:
+        payload["scope"] = scope
+
+    write_json(output_file, payload)
+    print(f"Discovery salvat în {output_file} ({len(payload.get('suggestions', []))} sugestii)")
+
+
 async def run():
     parser = argparse.ArgumentParser()
     parser.add_argument("--target-url", dest="target_url", default=None)
     parser.add_argument("--target-name", dest="target_name", default="target_manual")
     parser.add_argument("--client-token", dest="client_token", default=None)
+    parser.add_argument("--discover", action="store_true", default=False)
+    parser.add_argument("--scope", dest="scope", default="local", choices=["local", "global"])
     args = parser.parse_args()
 
     config_path = "public/config.json"
@@ -489,6 +591,17 @@ async def run():
         await process_manual_target(args.target_name, args.target_url, agent_llm, groq_client, browser)
         await browser.stop()
         print("Rulare manuală finalizată.")
+        return
+
+    if args.discover:
+        clients_filtered = [c for c in config.get("clients", []) if c.get("access_token") == args.client_token]
+        if not clients_filtered:
+            print("Nu am găsit client pentru token-ul furnizat.")
+            await browser.stop()
+            return
+        await process_discovery(clients_filtered[0], args.scope, agent_llm, groq_client, browser)
+        await browser.stop()
+        print("Discovery finalizat.")
         return
 
     clients = config.get("clients", [])
