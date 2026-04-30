@@ -499,19 +499,28 @@ async def run():
             await browser.stop()
             return
 
-    for client in clients:
-        try:
-            if client.get("type") == "local":
-                manual_sources = client.get("sources", [])
-                if isinstance(manual_sources, list) and manual_sources:
-                    for source_url in manual_sources:
-                        await process_manual_target(client.get("name", "client"), source_url, agent_llm, groq_client, browser)
-                    continue
-                await process_local_client(client, agent_llm, groq_client, browser)
-            elif client.get("type") == "national":
-                await process_national_client(client, agent_llm, groq_client, browser)
-        except Exception as e:
-            print(f"Eroare la procesarea clientului {client.get('name')}: {e}")
+    CHUNK_SIZE = 3
+    semaphore = asyncio.Semaphore(CHUNK_SIZE)
+
+    async def process_single_client(client):
+        async with semaphore:
+            try:
+                if client.get("type") == "local":
+                    manual_sources = client.get("sources", [])
+                    if isinstance(manual_sources, list) and manual_sources:
+                        for source_url in manual_sources:
+                            await process_manual_target(client.get("name", "client"), source_url, agent_llm, groq_client, browser)
+                        return
+                    await process_local_client(client, agent_llm, groq_client, browser)
+                elif client.get("type") == "national":
+                    await process_national_client(client, agent_llm, groq_client, browser)
+            except Exception as e:
+                print(f"Eroare la procesarea clientului {client.get('name')}: {e}")
+
+    for i in range(0, len(clients), CHUNK_SIZE):
+        chunk = clients[i : i + CHUNK_SIZE]
+        print(f"--- Procesare lot {i // CHUNK_SIZE + 1}/{(len(clients) + CHUNK_SIZE - 1) // CHUNK_SIZE} ({len(chunk)} clienți) ---")
+        await asyncio.gather(*(process_single_client(c) for c in chunk))
 
     await browser.stop()
     print("Toate sarcinile au fost finalizate.")

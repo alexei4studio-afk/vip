@@ -7,6 +7,7 @@ import glob
 from urllib.parse import urlparse
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+import portalocker
 
 app = Flask(__name__, static_folder='admin')
 CORS(app)
@@ -21,7 +22,22 @@ def load_config_data():
     if not os.path.exists(CONFIG_PATH):
         return {"clients": []}
     with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-        return json.load(f)
+        portalocker.lock(f, portalocker.LOCK_SH)
+        try:
+            return json.load(f)
+        finally:
+            portalocker.unlock(f)
+
+
+def save_config_data(data):
+    with open(CONFIG_PATH, 'r+', encoding='utf-8') as f:
+        portalocker.lock(f, portalocker.LOCK_EX)
+        try:
+            f.seek(0)
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            f.truncate()
+        finally:
+            portalocker.unlock(f)
 
 
 def find_client_by_token(token):
@@ -150,8 +166,7 @@ def get_config():
 def save_config():
     try:
         data = request.json
-        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        save_config_data(data)
         return jsonify({"message": "Config saved successfully"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -239,6 +254,9 @@ def report_status():
     token = request.args.get("access_token")
     if not token:
         return jsonify({"error": "Missing access_token"}), 400
+    client = find_client_by_token(token)
+    if not client:
+        return jsonify({"error": "Invalid token"}), 403
     job = REPORT_JOBS.get(token)
     if not job:
         return jsonify({"running": False, "logs": [], "pid": None, "exit_code": None})
@@ -250,15 +268,31 @@ def list_exports():
     token = request.args.get("access_token")
     if not token:
         return jsonify({"error": "Missing access_token"}), 400
+    client = find_client_by_token(token)
+    if not client:
+        return jsonify({"error": "Invalid token"}), 403
     return jsonify({"exports": list_archives_for_token(token)})
 
 
 @app.route('/api/exports/<path:filename>', methods=['GET'])
 def download_export(filename):
+    token = request.args.get("access_token")
+    if not token:
+        return jsonify({"error": "Missing access_token"}), 400
+    client = find_client_by_token(token)
+    if not client:
+        return jsonify({"error": "Invalid token"}), 403
     safe_name = os.path.basename(filename)
     if not safe_name.endswith(".json"):
         return jsonify({"error": "Invalid file type"}), 400
+    if not safe_name.startswith(f"{token}_"):
+        return jsonify({"error": "Access denied"}), 403
     return send_from_directory(EXPORTS_DIR, safe_name, as_attachment=True)
+
+
+@app.route('/dashboard/<path:path>')
+def spa_fallback(path):
+    return send_from_directory('dist', 'index.html')
 
 if __name__ == '__main__':
     print("Starting Admin Dashboard on http://localhost:5000")
