@@ -490,6 +490,93 @@ def add_client():
     }), 201
 
 
+@app.route('/api/admin/update', methods=['PUT'])
+def update_client():
+    payload = request.json or {}
+    client_id = (payload.get("id") or "").strip()
+    if not client_id:
+        return jsonify({"error": "Client ID is required"}), 400
+
+    config = load_config_data()
+    target = None
+    for c in config.get("clients", []):
+        if c.get("id") == client_id:
+            target = c
+            break
+    if not target:
+        return jsonify({"error": "Client not found"}), 404
+
+    name = (payload.get("name") or "").strip()
+    token = (payload.get("access_token") or "").strip()
+    if not name or not token:
+        return jsonify({"error": "Name and access_token are required"}), 400
+
+    for c in config.get("clients", []):
+        if c.get("access_token") == token and c.get("id") != client_id:
+            return jsonify({"error": "Token already used by another client"}), 409
+
+    subscription = (payload.get("subscription") or "delivery").strip()
+    if subscription not in ("online", "delivery", "complet"):
+        return jsonify({"error": "Invalid subscription type"}), 400
+
+    location = (payload.get("location") or "").strip()
+    if subscription in ("online", "complet") and not location:
+        return jsonify({"error": "Locația este obligatorie pentru abonamentul selectat."}), 400
+
+    location_radius = (payload.get("location_radius") or "local").strip()
+    if location_radius not in ("local", "global"):
+        return jsonify({"error": "Invalid location_radius"}), 400
+
+    glovo_url = (payload.get("glovo_url") or "").strip()
+    wolt_url = (payload.get("wolt_url") or "").strip()
+    tazz_url = (payload.get("tazz_url") or "").strip()
+    bolt_url = (payload.get("bolt_url") or "").strip()
+
+    sources = []
+    for url in [glovo_url, wolt_url, tazz_url, bolt_url]:
+        if url:
+            if not is_valid_manual_url(url):
+                return jsonify({"error": f"Invalid URL: {url}"}), 400
+            sources.append(url)
+
+    keywords = payload.get("keywords") or []
+    platforme = payload.get("platforme") or ["glovo"]
+
+    target["name"] = name
+    target["access_token"] = token
+    target["sources"] = sources
+    target["subscription"] = subscription
+    target["location"] = location
+    target["location_radius"] = location_radius
+    target["keywords"] = keywords if isinstance(keywords, list) else []
+    target["platforme"] = platforme if isinstance(platforme, list) else ["glovo"]
+
+    password_raw = (payload.get("password") or "").strip()
+    if password_raw:
+        target["password"] = generate_password_hash(password_raw)
+
+    save_config_data(config)
+    return jsonify({"message": "Client updated", "client": target})
+
+
+@app.route('/api/admin/delete', methods=['DELETE'])
+def delete_client():
+    client_id = request.args.get("id", "").strip()
+    if not client_id:
+        return jsonify({"error": "Client ID is required"}), 400
+
+    config = load_config_data()
+    clients = config.get("clients", [])
+    original_len = len(clients)
+    config["clients"] = [c for c in clients if c.get("id") != client_id]
+
+    if len(config["clients"]) == original_len:
+        return jsonify({"error": "Client not found"}), 404
+
+    save_config_data(config)
+    return jsonify({"message": "Client deleted"})
+
+
 def start_discovery_reader(token, process):
     def _reader():
         try:

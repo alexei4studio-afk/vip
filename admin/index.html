@@ -35,8 +35,14 @@
         </div>
         <p class="text-slate-400 mb-8">Gestionează setările și lansează scraper-ul manual.</p>
 
+        <!-- Add / Edit Client Form -->
         <div class="bg-slate-800 rounded-2xl shadow-xl border border-slate-700/50 p-6 mb-8">
-            <h2 class="text-xl font-bold mb-4">Add New Client</h2>
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="formTitle" class="text-xl font-bold">Adaugă Client Nou</h2>
+                <button id="cancelEditBtn" class="hidden text-sm text-slate-400 hover:text-yellow-400 border border-slate-700 px-4 py-2 rounded-lg transition-colors">
+                    Anulează Editarea
+                </button>
+            </div>
             <form id="addClientForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <!-- Secțiunea A: Date Identificare -->
                 <div class="md:col-span-2">
@@ -52,7 +58,7 @@
                 </div>
                 <div class="md:col-span-2">
                     <label class="block text-sm text-slate-400 mb-1">Parolă Client</label>
-                    <input name="password" type="password" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="Opțional — pentru securitate suplimentară">
+                    <input name="password" type="password" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="Opțional — lasă gol pentru a păstra parola existentă">
                 </div>
 
                 <!-- Secțiunea B: Surse Competitori -->
@@ -109,7 +115,7 @@
                 </div>
 
                 <div class="md:col-span-2 flex items-center gap-4">
-                    <button type="submit" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 px-8 rounded-lg transition-colors">Adaugă Client</button>
+                    <button type="submit" id="submitBtn" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 px-8 rounded-lg transition-colors">Adaugă Client</button>
                     <span id="addMsg" class="text-sm hidden"></span>
                 </div>
             </form>
@@ -118,6 +124,14 @@
             </div>
         </div>
 
+        <!-- Client List -->
+        <div class="bg-slate-800 rounded-2xl shadow-xl border border-slate-700/50 p-6 mb-8">
+            <h2 class="text-xl font-bold mb-4">Clienți Existenți</h2>
+            <div id="clientListEmpty" class="text-slate-500 text-sm hidden">Nu există clienți configurați.</div>
+            <div id="clientList" class="space-y-3"></div>
+        </div>
+
+        <!-- Config Editor -->
         <div class="bg-slate-800 rounded-2xl shadow-xl border border-slate-700/50 p-6 mb-8">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold">Setări Platformă (config.json)</h2>
@@ -129,11 +143,12 @@
             <p id="saveMsg" class="text-emerald-400 text-sm mt-2 hidden">Setările au fost salvate cu succes!</p>
         </div>
 
+        <!-- Start Scraping -->
         <div class="bg-slate-800 rounded-2xl shadow-xl border border-slate-700/50 p-6 text-center">
             <h2 class="text-2xl font-bold mb-4">Lansare Proces IA</h2>
             <p class="text-slate-400 mb-6">Apasă butonul de mai jos pentru a lansa agenții Browser-Use și a actualiza datele.</p>
             <button id="startBtn" class="bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-bold py-4 px-12 rounded-full text-xl shadow-lg transition-all transform hover:scale-105">
-                🚀 START MONITORIZARE
+                START MONITORIZARE
             </button>
             <p id="startMsg" class="text-cyan-400 text-sm mt-4 hidden">Procesul a fost pornit în fundal! Verifică terminalul (consola neagră) pentru log-uri.</p>
         </div>
@@ -141,10 +156,43 @@
     </div>
 
     <script>
+        let editingClientId = null;
+        let cachedConfig = null;
+
+        const SUBSCRIPTION_LABELS = {
+            delivery: 'Delivery',
+            online: 'Online',
+            complet: 'Complet',
+        };
+
+        // --- Helpers ---
+        function el(tag, attrs, children) {
+            const node = document.createElement(tag);
+            if (attrs) {
+                for (const [k, v] of Object.entries(attrs)) {
+                    if (k === 'className') node.className = v;
+                    else if (k.startsWith('on')) node.addEventListener(k.slice(2).toLowerCase(), v);
+                    else node.setAttribute(k, v);
+                }
+            }
+            if (children != null) {
+                if (typeof children === 'string') node.textContent = children;
+                else if (Array.isArray(children)) children.forEach(c => { if (c) node.appendChild(c); });
+                else node.appendChild(children);
+            }
+            return node;
+        }
+
+        function findSourceUrl(sources, platform) {
+            if (!Array.isArray(sources)) return '';
+            return sources.find(u => u.toLowerCase().includes(platform)) || '';
+        }
+
         // --- Admin Auth Guard ---
         function showAdmin() {
             document.getElementById('adminLogin').classList.add('hidden');
             document.getElementById('adminPanel').classList.remove('hidden');
+            loadClients();
         }
 
         if (localStorage.getItem('azisunt_admin') === 'true') {
@@ -182,7 +230,154 @@
             window.location.href = '/';
         });
 
-        // --- Add client ---
+        // --- Load & Render Client List ---
+        function loadClients() {
+            fetch('/api/admin/config')
+                .then(r => r.json())
+                .then(data => {
+                    cachedConfig = data;
+                    document.getElementById('configEditor').value = JSON.stringify(data, null, 2);
+                    renderClientList(data.clients || []);
+                });
+        }
+
+        function renderClientList(clients) {
+            const container = document.getElementById('clientList');
+            const emptyMsg = document.getElementById('clientListEmpty');
+
+            while (container.firstChild) container.removeChild(container.firstChild);
+
+            if (!clients.length) {
+                emptyMsg.classList.remove('hidden');
+                return;
+            }
+            emptyMsg.classList.add('hidden');
+
+            clients.forEach(c => {
+                const sub = SUBSCRIPTION_LABELS[c.subscription] || c.subscription || 'N/A';
+                const sourceCount = (c.sources || []).length;
+                const active = c.active !== false;
+
+                const statusBadge = el('span', {
+                    className: active
+                        ? 'text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full'
+                        : 'text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full'
+                }, active ? 'Activ' : 'Inactiv');
+
+                const nameEl = el('span', { className: 'font-semibold text-slate-100 truncate' }, c.name || '');
+
+                const nameRow = el('div', { className: 'flex items-center gap-2 mb-1' }, [nameEl, statusBadge]);
+
+                const tokenCode = el('code', { className: 'text-cyan-400/70' }, c.access_token || '');
+                const tokenSpan = el('span', {}, []);
+                tokenSpan.appendChild(document.createTextNode('Token: '));
+                tokenSpan.appendChild(tokenCode);
+
+                const subSpan = el('span', {}, []);
+                subSpan.appendChild(document.createTextNode('Abonament: '));
+                subSpan.appendChild(el('span', { className: 'text-purple-400' }, sub));
+
+                const srcSpan = el('span', {}, 'Surse: ' + sourceCount);
+
+                const metaItems = [tokenSpan, subSpan, srcSpan];
+                if (c.location) {
+                    metaItems.push(el('span', {}, 'Loc: ' + c.location));
+                }
+
+                const metaRow = el('div', { className: 'flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400' }, metaItems);
+
+                const infoCol = el('div', { className: 'flex-1 min-w-0' }, [nameRow, metaRow]);
+
+                const dashBtn = el('a', {
+                    href: window.location.origin + '/dashboard/' + encodeURIComponent(c.access_token),
+                    target: '_blank',
+                    className: 'text-xs text-purple-400 hover:text-purple-300 border border-purple-500/30 px-3 py-1.5 rounded-lg transition-colors'
+                }, 'Dashboard');
+
+                const editBtn = el('button', {
+                    className: 'text-xs text-blue-400 hover:text-blue-300 border border-blue-500/30 hover:border-blue-400 px-3 py-1.5 rounded-lg transition-colors',
+                    onClick: () => editClient(c.id)
+                }, 'Editează');
+
+                const delBtn = el('button', {
+                    className: 'text-xs text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-400 px-3 py-1.5 rounded-lg transition-colors',
+                    onClick: () => deleteClient(c.id, c.name)
+                }, 'Șterge');
+
+                const btnCol = el('div', { className: 'flex items-center gap-2 shrink-0' }, [dashBtn, editBtn, delBtn]);
+
+                const row = el('div', {
+                    className: 'flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-slate-700/50 bg-slate-950/50 p-4 hover:border-slate-600 transition-colors'
+                }, [infoCol, btnCol]);
+
+                container.appendChild(row);
+            });
+        }
+
+        // --- Edit Client ---
+        function editClient(clientId) {
+            if (!cachedConfig) return;
+            const client = (cachedConfig.clients || []).find(c => c.id === clientId);
+            if (!client) return;
+
+            editingClientId = clientId;
+            const form = document.getElementById('addClientForm');
+
+            form.name.value = client.name || '';
+            form.access_token.value = client.access_token || '';
+            form.password.value = '';
+            form.glovo_url.value = findSourceUrl(client.sources, 'glovo');
+            form.wolt_url.value = findSourceUrl(client.sources, 'wolt');
+            form.tazz_url.value = findSourceUrl(client.sources, 'tazz');
+            form.bolt_url.value = findSourceUrl(client.sources, 'bolt');
+            form.subscription.value = client.subscription || 'delivery';
+            form.location.value = client.location || '';
+            form.location_radius.value = client.location_radius || 'local';
+            form.keywords.value = Array.isArray(client.keywords) ? client.keywords.join(', ') : '';
+            form.platforme.value = Array.isArray(client.platforme) ? client.platforme.join(', ') : 'glovo';
+
+            document.getElementById('formTitle').textContent = 'Editează: ' + client.name;
+            document.getElementById('submitBtn').textContent = 'Actualizează Client';
+            document.getElementById('submitBtn').classList.remove('bg-cyan-600', 'hover:bg-cyan-500');
+            document.getElementById('submitBtn').classList.add('bg-amber-600', 'hover:bg-amber-500');
+            document.getElementById('cancelEditBtn').classList.remove('hidden');
+
+            document.getElementById('addClientForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function cancelEdit() {
+            editingClientId = null;
+            const form = document.getElementById('addClientForm');
+            form.reset();
+            document.getElementById('formTitle').textContent = 'Adaugă Client Nou';
+            document.getElementById('submitBtn').textContent = 'Adaugă Client';
+            document.getElementById('submitBtn').classList.remove('bg-amber-600', 'hover:bg-amber-500');
+            document.getElementById('submitBtn').classList.add('bg-cyan-600', 'hover:bg-cyan-500');
+            document.getElementById('cancelEditBtn').classList.add('hidden');
+            document.getElementById('addMsg').classList.add('hidden');
+            document.getElementById('dashboardLink').classList.add('hidden');
+        }
+
+        document.getElementById('cancelEditBtn').addEventListener('click', cancelEdit);
+
+        // --- Delete Client ---
+        function deleteClient(clientId, clientName) {
+            if (!confirm('Sigur vrei să ștergi clientul "' + clientName + '"? Această acțiune este ireversibilă.')) return;
+
+            fetch('/api/admin/delete?id=' + encodeURIComponent(clientId), { method: 'DELETE' })
+                .then(r => r.json().then(data => ({ ok: r.ok, data })))
+                .then(({ ok, data }) => {
+                    if (!ok) {
+                        alert(data.error || 'Eroare la ștergere.');
+                        return;
+                    }
+                    if (editingClientId === clientId) cancelEdit();
+                    loadClients();
+                })
+                .catch(() => alert('Eroare de rețea la ștergere.'));
+        }
+
+        // --- Add / Update Client (form submit) ---
         document.getElementById('addClientForm').addEventListener('submit', (e) => {
             e.preventDefault();
             const form = e.target;
@@ -217,46 +412,73 @@
                 platforme: platformeRaw ? platformeRaw.split(',').map(p => p.trim()).filter(Boolean) : ['glovo'],
             };
 
-            fetch('/api/admin/add', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-            })
-            .then(r => r.json().then(data => ({ ok: r.ok, data })))
-            .then(({ ok, data }) => {
-                if (!ok) {
-                    msg.textContent = data.error || 'Eroare la salvare.';
+            if (editingClientId) {
+                body.id = editingClientId;
+                fetch('/api/admin/update', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                })
+                .then(r => r.json().then(data => ({ ok: r.ok, data })))
+                .then(({ ok, data }) => {
+                    if (!ok) {
+                        msg.textContent = data.error || 'Eroare la actualizare.';
+                        msg.className = 'text-sm text-red-400';
+                        msg.classList.remove('hidden');
+                        return;
+                    }
+                    msg.textContent = 'Client "' + data.client.name + '" actualizat cu succes!';
+                    msg.className = 'text-sm text-emerald-400';
+                    msg.classList.remove('hidden');
+
+                    const fullUrl = window.location.origin + '/dashboard/' + encodeURIComponent(data.client.access_token);
+                    dashLink.href = fullUrl;
+                    dashLink.textContent = 'Dashboard: ' + fullUrl;
+                    linkBox.classList.remove('hidden');
+
+                    cancelEdit();
+                    loadClients();
+                })
+                .catch(() => {
+                    msg.textContent = 'Eroare de rețea.';
                     msg.className = 'text-sm text-red-400';
-                    linkBox.classList.add('hidden');
-                    return;
-                }
-                msg.textContent = `Client "${data.client.name}" adăugat cu succes!`;
-                msg.className = 'text-sm text-emerald-400';
-
-                const fullUrl = `http://localhost:5173${data.dashboard_url}`;
-                dashLink.href = fullUrl;
-                dashLink.textContent = `Dashboard: ${fullUrl}`;
-                linkBox.classList.remove('hidden');
-
-                form.reset();
-                // Refresh config editor
-                fetch('/api/admin/config').then(r => r.json()).then(cfg => {
-                    document.getElementById('configEditor').value = JSON.stringify(cfg, null, 2);
+                    msg.classList.remove('hidden');
                 });
-            })
-            .catch(() => {
-                msg.textContent = 'Eroare de rețea.';
-                msg.className = 'text-sm text-red-400';
-                linkBox.classList.add('hidden');
-            });
-        });
+            } else {
+                fetch('/api/admin/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                })
+                .then(r => r.json().then(data => ({ ok: r.ok, data })))
+                .then(({ ok, data }) => {
+                    if (!ok) {
+                        msg.textContent = data.error || 'Eroare la salvare.';
+                        msg.className = 'text-sm text-red-400';
+                        msg.classList.remove('hidden');
+                        linkBox.classList.add('hidden');
+                        return;
+                    }
+                    msg.textContent = 'Client "' + data.client.name + '" adăugat cu succes!';
+                    msg.className = 'text-sm text-emerald-400';
+                    msg.classList.remove('hidden');
 
-        // Load config (full, with tokens — admin only)
-        fetch('/api/admin/config')
-            .then(r => r.json())
-            .then(data => {
-                document.getElementById('configEditor').value = JSON.stringify(data, null, 2);
-            });
+                    const fullUrl = window.location.origin + data.dashboard_url;
+                    dashLink.href = fullUrl;
+                    dashLink.textContent = 'Dashboard: ' + fullUrl;
+                    linkBox.classList.remove('hidden');
+
+                    form.reset();
+                    loadClients();
+                })
+                .catch(() => {
+                    msg.textContent = 'Eroare de rețea.';
+                    msg.className = 'text-sm text-red-400';
+                    msg.classList.remove('hidden');
+                    linkBox.classList.add('hidden');
+                });
+            }
+        });
 
         // Save config
         document.getElementById('saveBtn').addEventListener('click', () => {
@@ -270,6 +492,7 @@
                     const msg = document.getElementById('saveMsg');
                     msg.classList.remove('hidden');
                     setTimeout(() => msg.classList.add('hidden'), 3000);
+                    loadClients();
                 });
             } catch(e) {
                 alert("JSON invalid! Te rog verifică formatul.");
