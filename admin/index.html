@@ -74,10 +74,6 @@
                     <input name="wolt_url" type="url" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="https://wolt.com/...">
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-400 mb-1">Tazz URL</label>
-                    <input name="tazz_url" type="url" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="https://tazz.ro/...">
-                </div>
-                <div>
                     <label class="block text-sm text-slate-400 mb-1">Bolt Food URL</label>
                     <input name="bolt_url" type="url" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="https://food.bolt.eu/...">
                 </div>
@@ -111,7 +107,7 @@
                 </div>
                 <div class="md:col-span-2">
                     <label class="block text-sm text-slate-400 mb-1">Platforme (separate prin virgulă)</label>
-                    <input name="platforme" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="e.g. glovo, tazz, wolt, bolt" value="glovo">
+                    <input name="platforme" class="w-full bg-slate-950 text-slate-100 rounded-lg border border-slate-700 px-4 py-2 focus:outline-none focus:border-cyan-500" placeholder="e.g. glovo, wolt, bolt" value="glovo">
                 </div>
 
                 <div class="md:col-span-2 flex items-center gap-4">
@@ -158,6 +154,7 @@
     <script>
         let editingClientId = null;
         let cachedConfig = null;
+        let adminPassword = '';
 
         const SUBSCRIPTION_LABELS = {
             delivery: 'Delivery',
@@ -196,7 +193,12 @@
         }
 
         if (localStorage.getItem('azisunt_admin') === 'true') {
-            showAdmin();
+            adminPassword = sessionStorage.getItem('azisunt_admin_pw') || '';
+            if (!adminPassword) {
+                localStorage.removeItem('azisunt_admin');
+            } else {
+                showAdmin();
+            }
         }
 
         document.getElementById('adminLoginForm').addEventListener('submit', (e) => {
@@ -216,6 +218,8 @@
                     err.classList.remove('hidden');
                     return;
                 }
+                adminPassword = password;
+                sessionStorage.setItem('azisunt_admin_pw', password);
                 localStorage.setItem('azisunt_admin', 'true');
                 showAdmin();
             })
@@ -328,7 +332,6 @@
             form.password.value = '';
             form.glovo_url.value = findSourceUrl(client.sources, 'glovo');
             form.wolt_url.value = findSourceUrl(client.sources, 'wolt');
-            form.tazz_url.value = findSourceUrl(client.sources, 'tazz');
             form.bolt_url.value = findSourceUrl(client.sources, 'bolt');
             form.subscription.value = client.subscription || 'delivery';
             form.location.value = client.location || '';
@@ -364,7 +367,10 @@
         function deleteClient(clientId, clientName) {
             if (!confirm('Sigur vrei să ștergi clientul "' + clientName + '"? Această acțiune este ireversibilă.')) return;
 
-            fetch('/api/admin/delete?id=' + encodeURIComponent(clientId), { method: 'DELETE' })
+            fetch('/api/admin/delete?id=' + encodeURIComponent(clientId), {
+                method: 'DELETE',
+                headers: { 'X-Admin-Password': adminPassword }
+            })
                 .then(r => r.json().then(data => ({ ok: r.ok, data })))
                 .then(({ ok, data }) => {
                     if (!ok) {
@@ -398,12 +404,12 @@
             }
 
             const body = {
+                admin_password: adminPassword,
                 name: form.name.value.trim(),
                 access_token: form.access_token.value.trim(),
                 password: form.password.value.trim(),
                 glovo_url: form.glovo_url.value.trim(),
                 wolt_url: form.wolt_url.value.trim(),
-                tazz_url: form.tazz_url.value.trim(),
                 bolt_url: form.bolt_url.value.trim(),
                 subscription: subscription,
                 location: location,

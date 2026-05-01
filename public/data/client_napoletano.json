@@ -1,7 +1,7 @@
 {
     "prices": [
         {
-            "platforma": "Tazz",
+            "platforma": "Wolt",
             "competitor": "Massari",
             "margherita": "49,9 RON",
             "diavola": "64,9 RON",
@@ -10,7 +10,7 @@
             "data": "2026-04-29 12:53:29"
         },
         {
-            "platforma": "Tazz",
+            "platforma": "Wolt",
             "competitor": "Napoli Pizzeria",
             "margherita": "49,9 RON",
             "diavola": "59,9 RON",
@@ -19,7 +19,7 @@
             "data": "2026-04-29 12:53:29"
         },
         {
-            "platforma": "Tazz",
+            "platforma": "Wolt",
             "competitor": "Mamizza",
             "margherita": "49,9 RON",
             "diavola": "54,9 RON",

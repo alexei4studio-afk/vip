@@ -31,7 +31,7 @@ export default function SourcesSection() {
             type="url"
             value={sourceInput}
             onChange={(e) => setSourceInput(e.target.value)}
-            placeholder="URL Glovo / Wolt / Bolt Food / Tazz"
+            placeholder="URL Glovo / Wolt / Bolt Food"
             className="flex-1 rounded-xl border border-apple-border bg-white px-4 py-2.5 text-sm text-apple-text transition-all placeholder:text-apple-muted/50 focus:border-apple-gold focus:ring-2 focus:ring-apple-gold/20"
             required
           />

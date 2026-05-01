@@ -111,7 +111,7 @@ def is_valid_manual_url(url):
     if parsed.scheme not in {"http", "https"}:
         return False
     host = (parsed.netloc or "").lower()
-    return any(p in host for p in ("glovo", "wolt", "bolt", "tazz", "food.bolt"))
+    return any(p in host for p in ("glovo", "wolt", "bolt", "food.bolt"))
 
 
 def client_output_candidates(client):
@@ -410,7 +410,7 @@ def add_client_source():
     if not token or not url:
         return jsonify({"error": "Token și URL necesare."}), 400
     if not is_valid_manual_url(url):
-        return jsonify({"error": "URL invalid. Permise: Glovo, Wolt, Tazz, Bolt Food."}), 400
+        return jsonify({"error": "URL invalid. Permise: Glovo, Wolt, Bolt Food."}), 400
     config = load_config_data()
     for c in config.get("clients", []):
         if c.get("access_token") == token and c.get("active", True):
@@ -424,15 +424,25 @@ def add_client_source():
     return jsonify({"error": "Client negăsit."}), 404
 
 
+def verify_admin_password():
+    admin_pass = os.environ.get("ADMIN_PASSWORD", "admin2025")
+    pw = (request.json or {}).get("admin_password", "") if request.is_json else request.args.get("admin_password", "")
+    if not pw:
+        pw = request.headers.get("X-Admin-Password", "")
+    return pw == admin_pass
+
+
 @app.route('/api/admin/add', methods=['POST'])
 def add_client():
+    if not verify_admin_password():
+        return jsonify({"error": "Autorizare admin necesară."}), 401
+
     payload = request.json or {}
     name = (payload.get("name") or "").strip()
     token = (payload.get("access_token") or "").strip()
     password_raw = (payload.get("password") or "").strip()
     glovo_url = (payload.get("glovo_url") or "").strip()
     wolt_url = (payload.get("wolt_url") or "").strip()
-    tazz_url = (payload.get("tazz_url") or "").strip()
     bolt_url = (payload.get("bolt_url") or "").strip()
     subscription = (payload.get("subscription") or "delivery").strip()
     location = (payload.get("location") or "").strip()
@@ -458,7 +468,7 @@ def add_client():
             return jsonify({"error": "Token already exists"}), 409
 
     sources = []
-    for url in [glovo_url, wolt_url, tazz_url, bolt_url]:
+    for url in [glovo_url, wolt_url, bolt_url]:
         if url:
             if not is_valid_manual_url(url):
                 return jsonify({"error": f"Invalid URL: {url}"}), 400
@@ -492,6 +502,9 @@ def add_client():
 
 @app.route('/api/admin/update', methods=['PUT'])
 def update_client():
+    if not verify_admin_password():
+        return jsonify({"error": "Autorizare admin necesară."}), 401
+
     payload = request.json or {}
     client_id = (payload.get("id") or "").strip()
     if not client_id:
@@ -529,11 +542,10 @@ def update_client():
 
     glovo_url = (payload.get("glovo_url") or "").strip()
     wolt_url = (payload.get("wolt_url") or "").strip()
-    tazz_url = (payload.get("tazz_url") or "").strip()
     bolt_url = (payload.get("bolt_url") or "").strip()
 
     sources = []
-    for url in [glovo_url, wolt_url, tazz_url, bolt_url]:
+    for url in [glovo_url, wolt_url, bolt_url]:
         if url:
             if not is_valid_manual_url(url):
                 return jsonify({"error": f"Invalid URL: {url}"}), 400
@@ -561,6 +573,11 @@ def update_client():
 
 @app.route('/api/admin/delete', methods=['DELETE'])
 def delete_client():
+    admin_pass = os.environ.get("ADMIN_PASSWORD", "admin2025")
+    pw = request.args.get("admin_password", "") or request.headers.get("X-Admin-Password", "")
+    if pw != admin_pass:
+        return jsonify({"error": "Autorizare admin necesară."}), 401
+
     client_id = request.args.get("id", "").strip()
     if not client_id:
         return jsonify({"error": "Client ID is required"}), 400

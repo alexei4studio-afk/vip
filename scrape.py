@@ -70,7 +70,7 @@ def extract_competitor_rows(result_text):
             taxa = extract_price(match.group(4) or "")
             rows.append(
                 {
-                    "platforma": "Glovo/Tazz",
+                    "platforma": "Glovo",
                     "competitor": competitor,
                     "margherita": margherita if margherita else "N/A",
                     "diavola": diavola if diavola else "N/A",
@@ -101,7 +101,7 @@ def hardcoded_market_fallback_local(client, output_file):
                 "data": now,
             },
             {
-                "platforma": "Tazz",
+                "platforma": "Wolt",
                 "competitor": "Mamizza",
                 "margherita": "48 RON",
                 "diavola": "44 RON",
@@ -317,7 +317,7 @@ async def process_local_client(client, agent_llm, groq_client, browser):
         {{
           "prices": [
             {{
-              "platforma": "Glovo/Tazz",
+              "platforma": "Glovo/Wolt",
               "competitor": "Massari/Mamizza",
               "margherita": "pret exact",
               "diavola": "pret exact",
@@ -468,7 +468,6 @@ async def process_discovery(client, scope, agent_llm, groq_client, browser):
     platform_urls = {
         "glovo": "glovoapp.com",
         "wolt": "wolt.com",
-        "tazz": "tazz.ro",
         "bolt": "food.bolt.eu",
     }
     search_targets = [platform_urls.get(p.lower(), p) for p in platforme]
@@ -481,7 +480,7 @@ async def process_discovery(client, scope, agent_llm, groq_client, browser):
     Pentru fiecare competitor găsit, extrage:
     - Numele afacerii
     - URL-ul complet pe platformă
-    - Platforma (Glovo/Wolt/Tazz/Bolt Food)
+    - Platforma (Glovo/Wolt/Bolt Food)
     - Categoria (ex: pizza, florărie, restaurant etc.)
     Returnează text simplu, o linie per competitor, format:
     Nume | URL | Platforma | Categoria
@@ -514,7 +513,7 @@ async def process_discovery(client, scope, agent_llm, groq_client, browser):
         {{
           "name": "Numele afacerii",
           "url": "URL complet pe platformă",
-          "platform": "Glovo/Wolt/Tazz/Bolt Food",
+          "platform": "Glovo/Wolt/Bolt Food",
           "category": "categoria"
         }}
       ],
