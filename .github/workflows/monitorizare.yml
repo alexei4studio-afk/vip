@@ -2,8 +2,22 @@ name: Monitorizare Zilnică
 
 on:
   schedule:
-    - cron: '0 3 * * *'
+    # Rulează zilnic la 06:00 UTC (09:00 ora României)
+    - cron: '0 6 * * *'
   workflow_dispatch:
+    inputs:
+      client_token:
+        description: 'Token client specific (gol = toți clienții activi)'
+        required: false
+        default: ''
+      mode:
+        description: 'Mod de rulare'
+        required: false
+        default: 'scrape'
+        type: choice
+        options:
+          - scrape
+          - discover
 
 permissions:
   contents: write
@@ -11,6 +25,7 @@ permissions:
 jobs:
   run-scraper:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -21,18 +36,138 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Instalare dependențe
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Instalare browser
+      - name: Instalare browser Chromium
         run: playwright install chromium --with-deps
 
-      - name: Executare script
+      - name: Citire programări clienți
+        id: schedule
+        run: |
+          python -c "
+          import json, sys
+          from datetime import datetime
+
+          with open('public/config.json', 'r') as f:
+              config = json.load(f)
+
+          token_input = '${{ github.event.inputs.client_token }}'.strip()
+          mode = '${{ github.event.inputs.mode }}'.strip() or 'scrape'
+          now = datetime.utcnow()
+          hour = now.hour
+          day_of_week = now.strftime('%A').lower()
+
+          clients_to_run = []
+          for c in config.get('clients', []):
+              if c.get('active', True) is False:
+                  continue
+
+              # Dacă e manual dispatch cu token specific
+              if token_input:
+                  if c.get('access_token') == token_input:
+                      clients_to_run.append(c.get('access_token'))
+                  continue
+
+              # Verifică programarea
+              schedule = c.get('schedule', {})
+              if not schedule.get('enabled', False):
+                  # Fără programare = rulează zilnic (backward compat)
+                  clients_to_run.append(c.get('access_token'))
+                  continue
+
+              freq = schedule.get('frequency', 'daily')
+              sched_hour = int(schedule.get('hour_utc', 6))
+
+              # Verifică ora (±1 oră toleranță pentru cron drift)
+              if abs(hour - sched_hour) > 1:
+                  continue
+
+              if freq == 'daily':
+                  clients_to_run.append(c.get('access_token'))
+              elif freq == 'every_2_days':
+                  day_of_year = now.timetuple().tm_yday
+                  if day_of_year % 2 == 0:
+                      clients_to_run.append(c.get('access_token'))
+              elif freq == 'weekly':
+                  sched_day = schedule.get('day_of_week', 'monday')
+                  if day_of_week == sched_day:
+                      clients_to_run.append(c.get('access_token'))
+
+          print(f'Clienți de rulat: {clients_to_run}')
+          with open('clients_to_run.json', 'w') as f:
+              json.dump({'tokens': clients_to_run, 'mode': mode}, f)
+          "
+
+      - name: Executare scraping per client
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: python scrape.py
+        run: |
+          python -c "
+          import json, subprocess, sys
+
+          with open('clients_to_run.json', 'r') as f:
+              run_config = json.load(f)
+
+          tokens = run_config['tokens']
+          mode = run_config['mode']
+
+          if not tokens:
+              print('Niciun client de rulat la această oră.')
+              sys.exit(0)
+
+          failed = []
+          for token in tokens:
+              print(f'\n=== Procesare: {token} (mode={mode}) ===')
+              cmd = ['python', 'scrape.py', '--client-token', token]
+              if mode == 'discover':
+                  cmd.extend(['--discover', '--scope', 'local'])
+
+              result = subprocess.run(cmd, timeout=600, capture_output=False)
+              if result.returncode != 0:
+                  print(f'EROARE: {token} a eșuat cu cod {result.returncode}')
+                  failed.append(token)
+              else:
+                  print(f'OK: {token} finalizat cu succes')
+
+          if failed:
+              print(f'\n⚠ Clienți cu erori: {failed}')
+              # Nu facem exit(1) ca să nu blocheze commit-ul rezultatelor parțiale
+          "
+
+      - name: Actualizare timestamp programări
+        run: |
+          python -c "
+          import json
+          from datetime import datetime
+
+          with open('public/config.json', 'r') as f:
+              config = json.load(f)
+
+          now = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+
+          with open('clients_to_run.json', 'r') as f:
+              run_config = json.load(f)
+
+          for c in config.get('clients', []):
+              if c.get('access_token') in run_config['tokens']:
+                  if 'schedule' not in c:
+                      c['schedule'] = {}
+                  c['schedule']['last_run'] = now
+
+          with open('public/config.json', 'w') as f:
+              json.dump(config, f, indent=2, ensure_ascii=False)
+          "
 
       - name: Git Commit & Push
         env:
@@ -40,7 +175,11 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add public/data/*.json
-          git commit -m "Actualizare automată a prețurilor [skip ci]" || echo "Nu există modificări noi"
+          git add public/data/*.json public/config.json
+          git commit -m "Actualizare automată prețuri [skip ci]" || echo "Nu există modificări noi"
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
           git push
+
+      - name: Cleanup
+        if: always()
+        run: rm -f clients_to_run.json

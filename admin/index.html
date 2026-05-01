@@ -127,6 +127,19 @@
             <div id="clientList" class="space-y-3"></div>
         </div>
 
+        <!-- Schedule Manager -->
+        <div class="bg-slate-800 rounded-2xl shadow-xl border border-slate-700/50 p-6 mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">Programare Automată (GitHub Actions)</h2>
+                <button id="refreshSchedules" class="text-sm text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 px-4 py-2 rounded-lg transition-colors">
+                    Reîncarcă
+                </button>
+            </div>
+            <p class="text-slate-400 text-sm mb-4">Configurează când rulează agentul automat pentru fiecare client. Programarea se execută prin GitHub Actions (cron zilnic la ora configurată).</p>
+            <div id="scheduleListEmpty" class="text-slate-500 text-sm hidden">Nu există clienți configurați.</div>
+            <div id="scheduleList" class="space-y-3"></div>
+        </div>
+
         <!-- Config Editor -->
         <div class="bg-slate-800 rounded-2xl shadow-xl border border-slate-700/50 p-6 mb-8">
             <div class="flex justify-between items-center mb-4">
@@ -190,6 +203,7 @@
             document.getElementById('adminLogin').classList.add('hidden');
             document.getElementById('adminPanel').classList.remove('hidden');
             loadClients();
+            loadSchedules();
         }
 
         if (localStorage.getItem('azisunt_admin') === 'true') {
@@ -514,6 +528,162 @@
                     setTimeout(() => msg.classList.add('hidden'), 5000);
                 });
         });
+
+        // --- Schedule Manager ---
+        const FREQ_LABELS = {
+            daily: 'Zilnic',
+            every_2_days: 'La 2 zile',
+            weekly: 'Săptămânal',
+        };
+        const DAY_LABELS = {
+            monday: 'Luni', tuesday: 'Marți', wednesday: 'Miercuri',
+            thursday: 'Joi', friday: 'Vineri', saturday: 'Sâmbătă', sunday: 'Duminică',
+        };
+
+        function utcToLocal(hourUtc) {
+            const d = new Date();
+            d.setUTCHours(hourUtc, 0, 0, 0);
+            return d.getHours().toString().padStart(2, '0') + ':00';
+        }
+
+        function localToUtc(hourLocal) {
+            const d = new Date();
+            d.setHours(hourLocal, 0, 0, 0);
+            return d.getUTCHours();
+        }
+
+        function loadSchedules() {
+            fetch('/api/admin/schedules')
+                .then(r => r.json())
+                .then(data => renderScheduleList(data.schedules || []));
+        }
+
+        function renderScheduleList(schedules) {
+            const container = document.getElementById('scheduleList');
+            const emptyMsg = document.getElementById('scheduleListEmpty');
+            while (container.firstChild) container.removeChild(container.firstChild);
+
+            if (!schedules.length) {
+                emptyMsg.classList.remove('hidden');
+                return;
+            }
+            emptyMsg.classList.add('hidden');
+
+            schedules.forEach(item => {
+                const sched = item.schedule || {};
+                const enabled = sched.enabled || false;
+                const freq = sched.frequency || 'daily';
+                const hourUtc = sched.hour_utc != null ? sched.hour_utc : 6;
+                const dayOfWeek = sched.day_of_week || 'monday';
+                const lastRun = sched.last_run;
+
+                const statusDot = el('span', {
+                    className: enabled
+                        ? 'inline-block w-2 h-2 rounded-full bg-emerald-400'
+                        : 'inline-block w-2 h-2 rounded-full bg-slate-600'
+                });
+                const nameEl = el('span', { className: 'font-semibold text-slate-100' }, item.name || '');
+                const statusText = el('span', {
+                    className: 'text-xs ' + (enabled ? 'text-emerald-400' : 'text-slate-500')
+                }, enabled ? 'Activ' : 'Dezactivat');
+
+                const headerRow = el('div', { className: 'flex items-center gap-2 mb-2' }, [statusDot, nameEl, statusText]);
+
+                // Toggle
+                const toggleBtn = el('button', {
+                    className: enabled
+                        ? 'text-xs bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-lg hover:bg-emerald-600/40 transition-colors'
+                        : 'text-xs bg-slate-700/50 text-slate-400 border border-slate-600 px-3 py-1 rounded-lg hover:bg-slate-600/50 transition-colors',
+                    onClick: () => saveSchedule(item.id, { enabled: !enabled, frequency: freq, hour_utc: hourUtc, day_of_week: dayOfWeek })
+                }, enabled ? 'Dezactivează' : 'Activează');
+
+                // Frequency selector
+                const freqSelect = document.createElement('select');
+                freqSelect.className = 'text-xs bg-slate-950 text-slate-300 border border-slate-700 rounded-lg px-2 py-1 focus:outline-none focus:border-cyan-500';
+                ['daily', 'every_2_days', 'weekly'].forEach(f => {
+                    const opt = document.createElement('option');
+                    opt.value = f;
+                    opt.textContent = FREQ_LABELS[f];
+                    if (f === freq) opt.selected = true;
+                    freqSelect.appendChild(opt);
+                });
+
+                // Hour selector
+                const hourSelect = document.createElement('select');
+                hourSelect.className = 'text-xs bg-slate-950 text-slate-300 border border-slate-700 rounded-lg px-2 py-1 focus:outline-none focus:border-cyan-500';
+                for (let h = 0; h < 24; h++) {
+                    const opt = document.createElement('option');
+                    opt.value = h;
+                    const localH = utcToLocal(h);
+                    opt.textContent = localH + ' (UTC ' + h.toString().padStart(2, '0') + ':00)';
+                    if (h === hourUtc) opt.selected = true;
+                    hourSelect.appendChild(opt);
+                }
+
+                // Day selector (only for weekly)
+                const daySelect = document.createElement('select');
+                daySelect.className = 'text-xs bg-slate-950 text-slate-300 border border-slate-700 rounded-lg px-2 py-1 focus:outline-none focus:border-cyan-500' + (freq !== 'weekly' ? ' hidden' : '');
+                Object.entries(DAY_LABELS).forEach(([val, label]) => {
+                    const opt = document.createElement('option');
+                    opt.value = val;
+                    opt.textContent = label;
+                    if (val === dayOfWeek) opt.selected = true;
+                    daySelect.appendChild(opt);
+                });
+
+                freqSelect.addEventListener('change', () => {
+                    if (freqSelect.value === 'weekly') daySelect.classList.remove('hidden');
+                    else daySelect.classList.add('hidden');
+                });
+
+                // Save button
+                const saveBtn = el('button', {
+                    className: 'text-xs bg-cyan-600/20 text-cyan-400 border border-cyan-500/30 px-3 py-1 rounded-lg hover:bg-cyan-600/40 transition-colors',
+                    onClick: () => saveSchedule(item.id, {
+                        enabled: enabled,
+                        frequency: freqSelect.value,
+                        hour_utc: parseInt(hourSelect.value),
+                        day_of_week: daySelect.value,
+                    })
+                }, 'Salvează');
+
+                const freqLabel = el('span', { className: 'text-xs text-slate-500' }, 'Frecvență:');
+                const hourLabel = el('span', { className: 'text-xs text-slate-500' }, 'Ora:');
+
+                const controlsRow = el('div', { className: 'flex flex-wrap items-center gap-2' },
+                    [toggleBtn, freqLabel, freqSelect, hourLabel, hourSelect, daySelect, saveBtn]);
+
+                // Last run info
+                const lastRunInfo = lastRun
+                    ? el('div', { className: 'text-xs text-slate-500 mt-2' }, 'Ultima rulare: ' + new Date(lastRun).toLocaleString('ro-RO'))
+                    : el('div', { className: 'text-xs text-slate-500 mt-2' }, 'Nicio rulare anterioară');
+
+                const card = el('div', {
+                    className: 'rounded-xl border border-slate-700/50 bg-slate-950/50 p-4'
+                }, [headerRow, controlsRow, lastRunInfo]);
+
+                container.appendChild(card);
+            });
+        }
+
+        function saveSchedule(clientId, schedule) {
+            fetch('/api/admin/schedule', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: clientId, schedule: schedule, admin_password: adminPassword })
+            })
+            .then(r => r.json().then(data => ({ ok: r.ok, data })))
+            .then(({ ok, data }) => {
+                if (!ok) {
+                    alert(data.error || 'Eroare la salvarea programării.');
+                    return;
+                }
+                loadSchedules();
+            })
+            .catch(() => alert('Eroare de rețea.'));
+        }
+
+        document.getElementById('refreshSchedules').addEventListener('click', loadSchedules);
     </script>
 </body>
 </html>

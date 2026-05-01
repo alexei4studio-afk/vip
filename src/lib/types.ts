@@ -40,6 +40,14 @@ export type ArchivedReport = {
   modified_at: number;
 };
 
+export type GroupedStrategies = {
+  imediate: string[];
+  termen_mediu: string[];
+  diferentiere: string[];
+};
+
+export type Strategies = string[] | GroupedStrategies;
+
 export type SortMode = 'default' | 'profit_desc' | 'price_diff';
 
 export type ReportJob = {

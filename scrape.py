@@ -5,7 +5,9 @@ import os
 import re
 import sys
 import hashlib
+import time
 from datetime import datetime
+from urllib.parse import quote_plus
 
 from browser_use import Agent, Browser, ChatGroq
 from dotenv import load_dotenv
@@ -32,7 +34,7 @@ def clean_json_response(content):
 def invoke_strategy_groq(groq_client, prompt):
     response = groq_client.chat.completions.create(
         model=MODEL_NAME,
-        temperature=0.2,
+        temperature=0.4,
         messages=[
             {
                 "role": "system",
@@ -145,6 +147,32 @@ def hardcoded_market_fallback_national(client, output_file):
         "strategii": ["Date fallback active. Verifica din nou scraping-ul live."],
         "fallback": True,
     }
+
+
+CITY_SLUGS = {
+    "bucurești": "bucuresti",
+    "bucharest": "bucuresti",
+    "cluj-napoca": "cluj",
+    "cluj": "cluj",
+    "timișoara": "timisoara",
+    "timisoara": "timisoara",
+    "iași": "iasi",
+    "iasi": "iasi",
+    "constanța": "constanta",
+    "constanta": "constanta",
+    "brașov": "brasov",
+    "brasov": "brasov",
+    "craiova": "craiova",
+    "sibiu": "sibiu",
+    "oradea": "oradea",
+    "ploiești": "ploiesti",
+    "ploiesti": "ploiesti",
+}
+
+
+def build_city_slug(location):
+    city = location.split(",")[0].strip().lower()
+    return CITY_SLUGS.get(city, city.replace(" ", "-"))
 
 
 def write_json(path, payload):
@@ -308,12 +336,19 @@ async def process_local_client(client, agent_llm, groq_client, browser):
 
     if is_napoletano:
         strategy_prompt = f"""
-        Ești expert în pricing pentru restaurante.
-        Date brute extrase:
+        Ești expert în pricing și strategie comercială pentru restaurante de livrare din România.
+
+        CLIENTUL NOSTRU: {client['name']}
+        Prețul nostru Margherita: 45 RON
+        Locația: {location}
+
+        DATE BRUTE EXTRASE DE PE PLATFORME:
         {result_text}
-        Date parse local:
+
+        DATE PARSATE:
         {json.dumps(rows, ensure_ascii=False)}
-        Returnează JSON valid STRICT:
+
+        Returnează JSON valid STRICT cu această structură:
         {{
           "prices": [
             {{
@@ -326,34 +361,70 @@ async def process_local_client(client, agent_llm, groq_client, browser):
             }}
           ],
           "analiza": {{
+            "pozitie_pret": "Sub medie / La medie / Peste medie",
+            "pret_nostru_vs_media": "diferența exactă în RON față de media competitorilor",
             "pret_margherita_noi": "45 RON",
-            "media_margherita_competitori": "valoare",
-            "cea_mai_ieftina_diavola": "competitor + pret",
-            "diferenta_diavola": "diferenta"
+            "media_margherita_competitori": "valoare calculată",
+            "cel_mai_ieftin_competitor": "nume + preț cel mai mic",
+            "cel_mai_scump_competitor": "nume + preț cel mai mare",
+            "taxa_livrare_medie": "valoare medie",
+            "numar_competitori": numar
           }},
-          "strategii": [
-            "Strategie 1",
-            "Strategie 2",
-            "Strategie 3"
-          ]
+          "strategii": {{
+            "imediate": [
+              "Acțiune concretă cu cifre exacte pentru implementare imediată"
+            ],
+            "termen_mediu": [
+              "Strategie pe 2-4 săptămâni cu obiectiv măsurabil"
+            ],
+            "diferentiere": [
+              "Cum să te diferențiezi de competitori"
+            ]
+          }}
         }}
+
+        REGULI OBLIGATORII:
+        - Fiecare strategie TREBUIE să conțină cifre concrete (prețuri, procente, RON)
+        - Bazează-te DOAR pe datele furnizate, NU inventa prețuri
+        - Include minimum 2 strategii per categorie (imediate, termen_mediu, diferentiere)
+        - Strategiile trebuie să fie specifice pentru pizza/restaurant, nu generice
+        - Analizează taxele de livrare ca factor competitiv
         """
     else:
         strategy_prompt = f"""
-        Ești expert în strategie comercială locală.
-        Iată datele extrase pentru '{client['name']}' în '{location}':
+        Ești expert în strategie comercială locală pentru piața de livrare din România.
+
+        CLIENTUL NOSTRU: {client['name']}
+        Locația: {location}
+
+        DATE EXTRASE:
         {result_text}
+
         Returnează JSON valid strict:
         {{
           "prices": [
             {{"produs": "Nume competitor", "pret": "Preț mediu", "timp_livrare": "Timp livrare"}}
           ],
-          "strategii": [
-            "Strategia 1",
-            "Strategia 2",
-            "Strategia 3"
-          ]
+          "analiza": {{
+            "pozitie_pret": "Sub medie / La medie / Peste medie",
+            "numar_competitori": numar,
+            "cel_mai_ieftin": "nume + preț",
+            "cel_mai_scump": "nume + preț"
+          }},
+          "strategii": {{
+            "imediate": [
+              "Acțiune concretă cu cifre exacte"
+            ],
+            "termen_mediu": [
+              "Strategie pe 2-4 săptămâni"
+            ],
+            "diferentiere": [
+              "Cum să te diferențiezi"
+            ]
+          }}
         }}
+
+        REGULI: Include cifre concrete. Minimum 2 strategii per categorie. Bazează-te doar pe date reale.
         """
 
     try:
@@ -414,9 +485,14 @@ async def process_national_client(client, agent_llm, groq_client, browser):
         return
 
     strategy_prompt = f"""
-    Ești expert în strategie națională.
-    Analizează datele extrase de la sursele ({targets_str}) pentru '{keywords_str}':
+    Ești expert în strategie comercială națională pentru piața din România.
+
+    SURSE ANALIZATE: {targets_str}
+    CUVINTE CHEIE: {keywords_str}
+
+    DATE EXTRASE:
     {result_text}
+
     Returneaza JSON valid strict:
     {{
       "regiuni": [
@@ -424,11 +500,20 @@ async def process_national_client(client, agent_llm, groq_client, browser):
       ],
       "lider_pret": "Numele liderului de preț",
       "media_pietei": "Valoarea medie a pieței",
-      "strategii": [
-        "Strategia 1",
-        "Strategia 2"
-      ]
+      "strategii": {{
+        "imediate": [
+          "Acțiune concretă cu cifre"
+        ],
+        "termen_mediu": [
+          "Strategie pe 2-4 săptămâni"
+        ],
+        "diferentiere": [
+          "Diferențiere față de competitori naționali"
+        ]
+      }}
     }}
+
+    REGULI: Include cifre concrete. Minimum 2 strategii per categorie. Bazează-te doar pe date reale.
     """
 
     try:
@@ -458,87 +543,142 @@ async def process_discovery(client, scope, agent_llm, groq_client, browser):
     keywords = client.get("keywords", [])
     keywords_str = ", ".join(keywords) if keywords else client.get("name", "restaurant")
     platforme = client.get("platforme", ["glovo"])
-    platforme_str = ", ".join(platforme)
+    city_slug = build_city_slug(location)
+    keywords_encoded = quote_plus(keywords_str)
 
     if scope == "local":
         radius_desc = f"rază de ~3km în jurul zonei {location}"
     else:
         radius_desc = f"pe întregul oraș {location.split(',')[0].strip()}"
 
-    platform_urls = {
-        "glovo": "glovoapp.com",
-        "wolt": "wolt.com",
-        "bolt": "food.bolt.eu",
-    }
-    search_targets = [platform_urls.get(p.lower(), p) for p in platforme]
-    search_targets_str = ", ".join(search_targets)
+    search_steps = []
+    for p in platforme:
+        p_lower = p.lower().strip()
+        if p_lower == "glovo":
+            search_steps.append(
+                f"- GLOVO: Navighează la https://glovoapp.com/ro/ro/{city_slug}/ "
+                f"apoi caută \"{keywords_str}\" folosind bara de căutare din pagină. "
+                f"Dacă bara de căutare nu apare, scrollează prin lista de restaurante/magazine."
+            )
+        elif p_lower == "wolt":
+            search_steps.append(
+                f"- WOLT: Navighează la https://wolt.com/ro/rou/{city_slug}/search?q={keywords_encoded} "
+                f"și așteaptă să se încarce rezultatele."
+            )
+        elif p_lower in ("bolt", "bolt food"):
+            search_steps.append(
+                f"- BOLT FOOD: Navighează la https://food.bolt.eu/ro-RO/ "
+                f"apoi caută \"{keywords_str}\" folosind bara de căutare."
+            )
+
+    search_steps_str = "\n    ".join(search_steps)
 
     task = f"""
-    Caută pe platformele de livrare: {search_targets_str}
-    Zona: {location}, {radius_desc}.
-    Caută afaceri similare cu: {keywords_str}.
-    Pentru fiecare competitor găsit, extrage:
-    - Numele afacerii
-    - URL-ul complet pe platformă
-    - Platforma (Glovo/Wolt/Bolt Food)
-    - Categoria (ex: pizza, florărie, restaurant etc.)
-    Returnează text simplu, o linie per competitor, format:
-    Nume | URL | Platforma | Categoria
-    Găsește minimum 5 competitori dacă este posibil.
+    Caută competitori pe platformele de livrare din zona {location} ({radius_desc}).
+
+    PAȘI DE URMAT:
+    {search_steps_str}
+
+    Pentru FIECARE competitor/afacere găsită pe pagină, extrage:
+    - Numele exact al afacerii (cum apare pe platformă)
+    - URL-ul complet din bara de adrese a browser-ului
+    - Platforma (Glovo / Wolt / Bolt Food)
+    - Categoria (ex: pizza, florărie, restaurant, patiserie etc.)
+    - Rating-ul (dacă este vizibil, altfel scrie "N/A")
+    - Timpul estimat de livrare (dacă este vizibil, altfel scrie "N/A")
+
+    Returnează text simplu, o linie per competitor, format STRICT:
+    Nume | URL complet | Platforma | Categoria | Rating | Timp livrare
+
+    IMPORTANT:
+    - Găsește MINIMUM 5 competitori dacă este posibil
+    - URL-ul trebuie să fie complet (să înceapă cu https://)
+    - Dacă bara de căutare nu funcționează, scrollează prin lista vizibilă
+    - Nu inventa date — extrage doar ce este vizibil pe pagină
     """
 
     client_id = client.get("id") or client.get("name", "").lower().replace(" ", "_")
     output_file = f"public/data/discover_{client_id}.json"
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    try:
-        agent = Agent(task=task, llm=agent_llm, browser=browser)
-        history = await agent.run()
-        result_text = (history.final_result() or "").strip()
-        if not result_text:
-            raise RuntimeError("Agentul nu a returnat rezultate de discovery.")
-    except Exception as err:
-        print(f"Discovery eșuat: {err}")
-        write_json(output_file, {"suggestions": [], "searched_at": now, "scope": scope, "error": str(err)})
+    MAX_RETRIES = 2
+    result_text = ""
+    last_error = None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            print(f"  Discovery încercare {attempt + 1}/{MAX_RETRIES + 1}...")
+            agent = Agent(task=task, llm=agent_llm, browser=browser)
+            history = await agent.run()
+            result_text = (history.final_result() or "").strip()
+            if result_text and "|" in result_text:
+                print(f"  Rezultate obținute ({len(result_text)} caractere)")
+                break
+            print(f"  Încercare {attempt + 1}: rezultat insuficient, reîncerc...")
+            last_error = "Rezultat gol sau fără format valid"
+        except Exception as err:
+            last_error = str(err)
+            print(f"  Încercare {attempt + 1} eșuată: {err}")
+        if attempt < MAX_RETRIES:
+            time.sleep(3)
+
+    if not result_text:
+        print(f"Discovery eșuat după {MAX_RETRIES + 1} încercări: {last_error}")
+        write_json(output_file, {
+            "suggestions": [],
+            "searched_at": now,
+            "scope": scope,
+            "error": last_error or "Niciun rezultat obținut",
+            "retries": MAX_RETRIES + 1,
+        })
         return
 
     strategy_prompt = f"""
-    Ești expert în analiza pieței.
+    Ești expert în analiza pieței de livrare din România.
     Iată rezultatele de discovery pentru competitori similari cu '{client["name"]}' în '{location}':
+
     {result_text}
 
     Returnează JSON valid strict cu lista de competitori găsiți:
     {{
       "suggestions": [
         {{
-          "name": "Numele afacerii",
-          "url": "URL complet pe platformă",
+          "name": "Numele exact al afacerii",
+          "url": "URL complet pe platformă (https://...)",
           "platform": "Glovo/Wolt/Bolt Food",
-          "category": "categoria"
+          "category": "categoria afacerii",
+          "rating": "rating-ul dacă există sau null",
+          "delivery_time": "timpul estimat de livrare sau null"
         }}
       ],
       "searched_at": "{now}",
-      "scope": "{scope}"
+      "scope": "{scope}",
+      "total_found": numar_total
     }}
-    Dacă un URL nu este complet sau valid, omite-l.
-    Elimină duplicatele.
+
+    REGULI:
+    - Păstrează DOAR URL-urile care încep cu https:// și sunt de pe platforme reale
+    - Elimină duplicatele (același restaurant pe aceeași platformă)
+    - Dacă un câmp lipsește, pune null (nu string gol)
+    - Nu inventa afaceri sau URL-uri care nu apar în datele de mai sus
     """
 
     try:
         strategy_content = invoke_strategy_groq(groq_client, strategy_prompt)
         payload = json.loads(strategy_content)
     except Exception as parse_err:
-        print(f"Parsare discovery eșuată: {parse_err}")
+        print(f"Parsare discovery eșuată, folosesc fallback: {parse_err}")
         lines = [line.strip() for line in result_text.split("\n") if "|" in line]
         suggestions = []
         for line in lines:
             parts = [p.strip() for p in line.split("|")]
-            if len(parts) >= 3:
+            if len(parts) >= 3 and parts[1].startswith("http"):
                 suggestions.append({
                     "name": parts[0],
                     "url": parts[1],
                     "platform": parts[2],
                     "category": parts[3] if len(parts) > 3 else "",
+                    "rating": parts[4] if len(parts) > 4 else None,
+                    "delivery_time": parts[5] if len(parts) > 5 else None,
                 })
         payload = {"suggestions": suggestions, "searched_at": now, "scope": scope}
 
@@ -576,14 +716,16 @@ async def run():
     agent_llm = ChatGroq(model=MODEL_NAME)
     groq_client = Groq(api_key=groq_api_key)
     browser = Browser(
-        headless=False,
+        headless=True,
         args=[
             "--blink-settings=imagesEnabled=false",
             "--autoplay-policy=user-gesture-required",
             "--disable-features=PreloadMediaEngagementData,MediaEngagementBypassAutoplayPolicies",
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
         ],
-        minimum_wait_page_load_time=0.2,
-        wait_for_network_idle_page_load_time=0.0,
+        minimum_wait_page_load_time=2.0,
+        wait_for_network_idle_page_load_time=3.0,
     )
 
     if args.target_url:

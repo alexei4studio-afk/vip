@@ -1,4 +1,4 @@
-import type { AppConfig, ClientConfig, DataRecord, ArchivedReport, DiscoveryResult } from './types';
+import type { AppConfig, ClientConfig, DataRecord, ArchivedReport, DiscoveryResult, GroupedStrategies } from './types';
 
 export function getApiBaseUrl(): string {
   if (import.meta.env.VITE_API_URL) {
@@ -97,7 +97,7 @@ export async function fetchExports(token: string): Promise<ArchivedReport[]> {
 
 export async function loadClientDataJson(
   client: ClientConfig,
-): Promise<{ items: DataRecord[]; strategies: string[] }> {
+): Promise<{ items: DataRecord[]; strategies: string[]; groupedStrategies: GroupedStrategies | null }> {
   const jsonPath =
     client.type === 'national'
       ? '/data/national_business.json'
@@ -118,11 +118,22 @@ export async function loadClientDataJson(
     items = payload.regiuni;
   }
 
-  const strategies = Array.isArray(payload.strategii)
-    ? payload.strategii.filter((v: unknown) => typeof v === 'string')
-    : [];
+  let strategies: string[] = [];
+  let groupedStrategies: GroupedStrategies | null = null;
 
-  return { items, strategies };
+  const raw = payload.strategii;
+  if (Array.isArray(raw)) {
+    strategies = raw.filter((v: unknown) => typeof v === 'string');
+  } else if (raw && typeof raw === 'object') {
+    groupedStrategies = {
+      imediate: Array.isArray(raw.imediate) ? raw.imediate.filter((v: unknown) => typeof v === 'string') : [],
+      termen_mediu: Array.isArray(raw.termen_mediu) ? raw.termen_mediu.filter((v: unknown) => typeof v === 'string') : [],
+      diferentiere: Array.isArray(raw.diferentiere) ? raw.diferentiere.filter((v: unknown) => typeof v === 'string') : [],
+    };
+    strategies = [...groupedStrategies.imediate, ...groupedStrategies.termen_mediu, ...groupedStrategies.diferentiere];
+  }
+
+  return { items, strategies, groupedStrategies };
 }
 
 export function getExportDownloadUrl(filename: string, token: string): string {

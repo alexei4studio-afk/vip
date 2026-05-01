@@ -594,6 +594,66 @@ def delete_client():
     return jsonify({"message": "Client deleted"})
 
 
+@app.route('/api/admin/schedule', methods=['PUT'])
+def update_schedule():
+    if not verify_admin_password():
+        return jsonify({"error": "Autorizare admin necesară."}), 401
+
+    payload = request.json or {}
+    client_id = (payload.get("id") or "").strip()
+    if not client_id:
+        return jsonify({"error": "Client ID is required"}), 400
+
+    config = load_config_data()
+    target = None
+    for c in config.get("clients", []):
+        if c.get("id") == client_id:
+            target = c
+            break
+    if not target:
+        return jsonify({"error": "Client not found"}), 404
+
+    schedule = payload.get("schedule", {})
+    enabled = bool(schedule.get("enabled", False))
+    frequency = schedule.get("frequency", "daily")
+    hour_utc = int(schedule.get("hour_utc", 6))
+    day_of_week = schedule.get("day_of_week", "monday")
+
+    if frequency not in ("daily", "every_2_days", "weekly"):
+        return jsonify({"error": "Frecvență invalidă. Opțiuni: daily, every_2_days, weekly"}), 400
+    if hour_utc < 0 or hour_utc > 23:
+        return jsonify({"error": "Ora UTC trebuie să fie între 0 și 23"}), 400
+    if day_of_week not in ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"):
+        return jsonify({"error": "Zi invalidă"}), 400
+
+    target["schedule"] = {
+        "enabled": enabled,
+        "frequency": frequency,
+        "hour_utc": hour_utc,
+        "day_of_week": day_of_week,
+        "last_run": target.get("schedule", {}).get("last_run"),
+    }
+
+    save_config_data(config)
+    return jsonify({"message": "Programare actualizată", "schedule": target["schedule"]})
+
+
+@app.route('/api/admin/schedules', methods=['GET'])
+def list_schedules():
+    config = load_config_data()
+    schedules = []
+    for c in config.get("clients", []):
+        sched = c.get("schedule", {})
+        schedules.append({
+            "id": c.get("id"),
+            "name": c.get("name"),
+            "access_token": c.get("access_token"),
+            "active": c.get("active", True),
+            "schedule": sched,
+        })
+    return jsonify({"schedules": schedules})
+
+
 def start_discovery_reader(token, process):
     def _reader():
         try:

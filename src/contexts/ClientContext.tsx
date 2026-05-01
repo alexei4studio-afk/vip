@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { AppConfig, ArchivedReport, ClientConfig, DataRecord, DiscoverySuggestion, SubscriptionTier } from '../lib/types';
+import type { AppConfig, ArchivedReport, ClientConfig, DataRecord, DiscoverySuggestion, GroupedStrategies, SubscriptionTier } from '../lib/types';
 import { deriveClientId } from '../lib/utils';
 import {
   clientAuth,
@@ -32,6 +32,7 @@ interface ClientContextValue {
 
   data: DataRecord[];
   strategies: string[];
+  groupedStrategies: GroupedStrategies | null;
   loadError: string;
 
   reportMsg: string;
@@ -78,6 +79,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
 
   const [data, setData] = useState<DataRecord[]>([]);
   const [strategies, setStrategies] = useState<string[]>([]);
+  const [groupedStrategies, setGroupedStrategies] = useState<GroupedStrategies | null>(null);
   const [loadError, setLoadError] = useState('');
 
   const [reportMsg, setReportMsg] = useState('');
@@ -94,14 +96,16 @@ export function ClientProvider({ children }: { children: ReactNode }) {
 
   const loadData = useCallback((client: ClientConfig) => {
     loadClientDataJson(client)
-      .then(({ items, strategies: strats }) => {
+      .then(({ items, strategies: strats, groupedStrategies: grouped }) => {
         setData(items);
         setStrategies(strats);
+        setGroupedStrategies(grouped);
         setLoadError('');
       })
       .catch(() => {
         setData([]);
         setStrategies([]);
+        setGroupedStrategies(null);
         setLoadError('Datele clientului nu au putut fi încărcate.');
       });
   }, []);
@@ -312,6 +316,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
         config,
         data,
         strategies,
+        groupedStrategies,
         loadError,
         reportMsg,
         isGeneratingReport,
