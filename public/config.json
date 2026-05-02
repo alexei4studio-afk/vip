@@ -11,7 +11,10 @@
       "platforme": [
         "glovo"
       ],
-      "type": "local"
+      "type": "local",
+      "schedule": {
+        "last_run": "2026-05-02T07:53:47Z"
+      }
     },
     {
       "access_token": "nap77",
@@ -27,7 +30,10 @@
       "type": "local",
       "sources": [
         "https://glovoapp.com/ro/ro/bucuresti/pizzeria-massari-buc/"
-      ]
+      ],
+      "schedule": {
+        "last_run": "2026-05-02T07:53:47Z"
+      }
     },
     {
       "access_token": "bus88",
@@ -39,7 +45,10 @@
         "emag.ro",
         "altex.ro"
       ],
-      "type": "national"
+      "type": "national",
+      "schedule": {
+        "last_run": "2026-05-02T07:53:47Z"
+      }
     }
   ]
 }
