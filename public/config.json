@@ -13,7 +13,7 @@
       ],
       "type": "local",
       "schedule": {
-        "last_run": "2026-05-03T08:09:08Z"
+        "last_run": "2026-05-04T08:38:41Z"
       }
     },
     {
@@ -32,7 +32,7 @@
         "https://glovoapp.com/ro/ro/bucuresti/pizzeria-massari-buc/"
       ],
       "schedule": {
-        "last_run": "2026-05-03T08:09:08Z"
+        "last_run": "2026-05-04T08:38:41Z"
       }
     },
     {
@@ -47,7 +47,7 @@
       ],
       "type": "national",
       "schedule": {
-        "last_run": "2026-05-03T08:09:08Z"
+        "last_run": "2026-05-04T08:38:41Z"
       }
     }
   ]
